@@ -86,11 +86,11 @@ app.include_router(sources.router,    prefix="/api/v1/sources",    tags=["source
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:
     """Liveness probe — does not check dependencies."""
-    return {"status": "ok", "environment": settings.environment}
+    return {"status": "ok"}
 
 
 @app.get("/ready", tags=["meta"])
 async def ready() -> dict[str, str]:
     """Readiness probe — checks database connectivity."""
-    # TODO: implement DB ping when db/session.py is wired up
+    # TODO(phase-1.2): DB ping once a real query path exists.
     return {"status": "ready"}

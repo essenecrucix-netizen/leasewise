@@ -103,12 +103,17 @@ def test_quebec_qst_compounds_correctly() -> None:
 
     # GST = 700 × 5% = 35.00
     assert gst == DEC("35.00")
-    # QST = (700 + 35) × 9.975% = 73.31
-    assert qst == DEC("73.31")
-    # Combined effective rate matches table
-    total = gst + qst
-    expected_effective = monthly_pre_tax * lease_tax_rate("QC")
-    assert _close(total, expected_effective)
+    # QST = (700 + 35) × 9.975% = 73.31625, rounded half-even to 73.32
+    assert qst == DEC("73.32")
+    # The split sums to the *actual* compounded effective QC rate:
+    # (1 + 0.05) × (1 + 0.09975) - 1 = 0.1547375. Note this is intentionally
+    # different from lease_tax_rate("QC") (which returns the simple sum
+    # 0.14975 to match the design-phase JS reference). The simple sum is
+    # used as the bulk-tax-rate input to calculate_lease; split_qc_tax is
+    # the more accurate breakdown surfaced on the customer worksheet.
+    compounded_rate = (DEC("1.05") * DEC("1.09975")) - DEC("1")
+    expected_compounded = monthly_pre_tax * compounded_rate
+    assert _close(gst + qst, expected_compounded)
 
 
 # ── BC luxury surtax above threshold ────────────────────────────────────────

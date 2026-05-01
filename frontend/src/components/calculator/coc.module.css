@@ -1,0 +1,144 @@
+/* Polished output card (.coc) — ported from docs/design-phase/calculator.css.
+   Used for every state of the calculator output. State-specific tone is
+   applied via additional class names. */
+
+.coc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-family: var(--font-body);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.eyebrowDot          { color: var(--lime); }
+.eyebrowDotAmber     { color: var(--amber); }
+.eyebrowDotOrange    { color: var(--blood-orange); }
+
+.pay {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  font-size: clamp(56px, 7vw, 84px);
+  line-height: 1;
+  color: var(--text);
+}
+.pay sub {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-muted);
+  vertical-align: baseline;
+  margin-left: 8px;
+  font-weight: 400;
+}
+.payWarn  { color: var(--amber); }
+.payBad   { color: var(--blood-orange); }
+.payMuted { color: var(--text-faint); }
+
+.break { display: flex; flex-direction: column; gap: 0; }
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 13px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.row:last-child { border-bottom: 0; }
+.rowL { color: var(--text-muted); white-space: nowrap; }
+.rowV {
+  color: var(--text);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.rowTotal {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+  margin-top: 4px;
+}
+.rowTotal .rowL { color: var(--text); font-weight: 500; }
+.rowTotal .rowV { font-weight: 600; font-size: 15px; }
+
+.flag {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: rgba(232, 89, 60, 0.08);
+  border-left: 3px solid var(--blood-orange);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.flag strong {
+  color: var(--blood-orange);
+  display: block;
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+.flagAmber {
+  background: rgba(186, 117, 23, 0.08);
+  border-left-color: var(--amber);
+}
+.flagAmber strong { color: var(--amber); }
+
+/* Skeleton shimmer for the loading state. */
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-inset) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skelTitle  { height: 14px; width: 40%; }
+.skelBig    { height: 80px; width: 70%; margin: 4px 0; }
+.skelLine   { height: 12px; width: 100%; }
+.skelLine2  { height: 12px; width: 80%; }
+
+/* Empty / "enter your inputs" state */
+.empty {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+}
+.emptyTitle {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.emptyHint {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 38ch;
+  margin: 0 auto;
+}
+
+.opaqueStale { opacity: 0.92; }

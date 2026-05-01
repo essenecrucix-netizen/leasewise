@@ -1,0 +1,187 @@
+/* Calculator page-level styles, ported from docs/design-phase/calculator.css.
+   Class names preserved so the design contract is recognisable; only the
+   pieces used by the Phase 1.2 page are included here. The polished
+   output card (.coc) lives in coc.module.css. */
+
+.page { padding: var(--space-10) 0 var(--space-16); }
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: var(--space-4);
+  margin-bottom: var(--space-8);
+  flex-wrap: wrap;
+}
+.head h1 { margin: 6px 0 0; }
+.head p {
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+  max-width: 60ch;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+@media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } }
+
+.outputCol { position: sticky; top: 24px; }
+@media (max-width: 1024px) { .outputCol { position: static; } }
+
+/* Input groups */
+.group {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+}
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+}
+.groupNum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: 12px;
+}
+.groupBody {
+  padding: 4px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 600px) { .fieldRow { grid-template-columns: 1fr; } }
+
+.field label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fieldHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.input {
+  appearance: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  width: 100%;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--text);
+}
+
+.affix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.affix span {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  pointer-events: none;
+}
+.affix input { padding-left: 26px; }
+.affixRight span {
+  left: auto;
+  right: 12px;
+}
+.affixRight input { padding-left: 12px; padding-right: 26px; }
+
+/* Province grid */
+.provGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+@media (max-width: 600px) { .provGrid { grid-template-columns: repeat(5, 1fr); } }
+.provBtn {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  height: 36px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+.provBtn:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.provBtnActive {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+/* State preview pills (mirrors .term-pill in calculator.css) */
+.statePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.statePill {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.statePillActive {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.statePreviewCard {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: var(--space-4);
+}
+.statePreviewCard .eyebrow { margin-bottom: 8px; display: block; }
+.statePreviewMeta {
+  margin-top: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
