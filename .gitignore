@@ -22,6 +22,13 @@ frontend/.turbo
 frontend/coverage/
 frontend/*.tsbuildinfo
 
+# There is no package.json at the repo root — the only Node project is
+# in frontend/. Block a stray root package-lock.json from being committed.
+# (npm at the repo root will warn about workspace root inference.)
+/package-lock.json
+/package.json
+/node_modules/
+
 # Backend (Python)
 backend/.venv/
 backend/venv/

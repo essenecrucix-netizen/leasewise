@@ -65,7 +65,10 @@ else
 fi
 
 # ── 5. Print the two-terminal instructions ──────────────────────────────────
-cat <<'EOF'
+# The default backend port is 8000 and the default frontend port is 3000.
+# On hosts where those are taken (e.g. the dev VM that also runs Workgraph),
+# pass an explicit port override per the examples below.
+cat <<EOF
 
 OK Bootstrap complete.
 
@@ -76,11 +79,13 @@ Now open two terminals:
     source .venv/bin/activate
     uv run uvicorn app.main:app --reload --port 8000
     -> http://localhost:8000   (docs at /docs)
+    # Port override:  ... --port 8001
 
   Terminal 2 (frontend):
     cd frontend
     npm run dev
     -> http://localhost:3000
+    # Port override:  npm run dev -- --port 3010
 
 Postgres: ${POSTGRES_HOST}:${POSTGRES_PORT}  (db: ${POSTGRES_DB}, user: ${POSTGRES_USER})
 
