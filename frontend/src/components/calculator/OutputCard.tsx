@@ -19,13 +19,17 @@ import styles from './coc.module.css';
 
 
 // ── State discriminated union ───────────────────────────────────────────
+//
+// Warning carries APR-denominated markup data. Canadian dealer worksheets
+// quote APR; presenting markup in APR / bps is the canonical Canadian
+// framing. Money factor is shown as a secondary disclosure below.
 export type CardState =
   | { kind: 'empty' }
   | { kind: 'loading' }
   | { kind: 'error';     message: string }
   | { kind: 'stale';     response: CalculatorResponse; province: ProvinceCode; programLabel: string }
   | { kind: 'bc_luxury'; response: CalculatorResponse }
-  | { kind: 'warning';   response: CalculatorResponse; province: ProvinceCode; mfMarkup: string }
+  | { kind: 'warning';   response: CalculatorResponse; province: ProvinceCode; captiveApr: string; quotedApr: string }
   | { kind: 'success';   response: CalculatorResponse; province: ProvinceCode; programLabel: string };
 
 
@@ -127,13 +131,23 @@ function Success({
 function Warning({
   response,
   province,
-  mfMarkup,
+  captiveApr,
+  quotedApr,
 }: {
-  response: CalculatorResponse;
-  province: ProvinceCode;
-  mfMarkup: string;
+  response:   CalculatorResponse;
+  province:   ProvinceCode;
+  captiveApr: string;
+  quotedApr:  string;
 }): JSX.Element {
-  const markupPct = (Number(mfMarkup) * 2400).toFixed(2);
+  // Canadian framing: APR primary, money factor disclosed as the dealer's
+  // internal pricing convention. Both numbers are computed display-side
+  // from the captive vs quoted APRs — pure unit conversion, not lease math.
+  const cap = Number(captiveApr);
+  const quo = Number(quotedApr);
+  const bps = Number.isFinite(cap) && Number.isFinite(quo) ? Math.round((quo - cap) * 100) : 0;
+  const captiveMf = Number.isFinite(cap) ? (cap / 2400).toFixed(5) : '—';
+  const quotedMf  = Number.isFinite(quo) ? (quo / 2400).toFixed(5) : '—';
+
   return (
     <div className={styles.coc} aria-live="polite">
       <div className={styles.eyebrow}>
@@ -146,9 +160,14 @@ function Warning({
       </div>
       <div className={`${styles.flag} ${styles.flagAmber}`}>
         <div>
-          <strong>Money factor marked up</strong>
-          Quoted MF appears <span className="mono">{markupPct}%</span> higher
-          than the captive base. That cost shows up every month for the term.
+          <strong>APR marked up ~{bps} bps</strong>
+          Captive base is <span className="mono">{cap.toFixed(2)}%</span>; dealer
+          quoted <span className="mono">{quo.toFixed(2)}%</span>. That difference
+          shows up every month for the term.
+          <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+            Money factor: <span className="mono">{captiveMf}</span> →{' '}
+            <span className="mono">{quotedMf}</span> · ~92% of dealers mark this up.
+          </div>
         </div>
       </div>
       <Breakdown response={response} />

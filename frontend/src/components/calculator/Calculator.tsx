@@ -23,6 +23,13 @@ import {
   computeLease,
 } from '@/lib/api-client';
 import { formatPercent } from '@/lib/format';
+import {
+  APR_MAX,
+  APR_MIN,
+  aprStringToMoneyFactorString,
+  aprToMoneyFactor,
+  parseApr,
+} from '@/lib/rate';
 
 import { OutputCard, type CardState } from './OutputCard';
 import inputStyles from './calculator.module.css';
@@ -42,15 +49,17 @@ const STATE_OVERRIDES: StateOverride[] = [
   'auto', 'empty', 'loading', 'success', 'warning', 'bc_luxury', 'error', 'stale',
 ];
 
-// Defaults that render the canonical fixture (BMW X3 / AB / 39mo / 3.99%)
-// on first paint without requiring user input. Real Canadian numbers per
-// CLAUDE.md "Real Canadian data, always."
+// Defaults that render the canonical fixture (BMW X3 / AB / 39mo / 3.99%
+// APR) on first paint without requiring user input. Real Canadian numbers
+// per CLAUDE.md "Real Canadian data, always." APR is the primary input
+// because Canadian dealer worksheets quote APR, never money factor — see
+// Phase 1.2.1 fix.
 const DEFAULTS = {
   msrp:             '62400',
   freight_pdi:      '2480',
   cap_cost:         '58900',
   residual_percent: '0.59',
-  money_factor:     '0.00166',
+  apr:              '3.99',
   term_months:      39,
   annual_km:        16000,
   province_code:    'AB' as ProvinceCode,
@@ -98,7 +107,7 @@ export function Calculator(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     form.msrp, form.freight_pdi, form.cap_cost,
-    form.residual_percent, form.money_factor,
+    form.residual_percent, form.apr,
     form.term_months, form.annual_km, form.province_code,
     form.cash_incentives, form.down_payment, form.trade_equity,
     form.acquisition_fee, form.provincial_fees,
@@ -112,13 +121,22 @@ export function Calculator(): JSX.Element {
     setLoading(true);
     setError(null);
 
+    // The form holds APR (Canadian convention); the backend's wire format
+    // is money_factor. Convert at the boundary, not on the backend.
+    const moneyFactor = aprStringToMoneyFactorString(form.apr);
+    if (moneyFactor === null) {
+      setError('Could not parse APR.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const req: CalculatorRequest = {
         msrp:             form.msrp,
         freight_pdi:      form.freight_pdi,
         cap_cost:         form.cap_cost,
         residual_percent: form.residual_percent,
-        money_factor:     form.money_factor,
+        money_factor:     moneyFactor,
         term_months:      form.term_months,
         annual_km:        form.annual_km,
         province_code:    form.province_code,
@@ -176,7 +194,15 @@ export function Calculator(): JSX.Element {
     if (override === 'error')   return { kind: 'error', message: 'Sample error: backend unreachable.' };
     if (!response) return detected;
     if (override === 'success')   return { kind: 'success',   response, province: form.province_code, programLabel: 'Apr 2026 captive program' };
-    if (override === 'warning')   return { kind: 'warning',   response, province: form.province_code, mfMarkup: '0.00084' };
+    if (override === 'warning')   return {
+      kind:        'warning',
+      response,
+      province:    form.province_code,
+      // Sample preview values — captive 3.99%, dealer quoting 4.49% (50 bps markup).
+      // Real auto-detection lands when percentile + program data wires up in 1.3.
+      captiveApr:  '3.99',
+      quotedApr:   '4.49',
+    };
     if (override === 'bc_luxury') return { kind: 'bc_luxury', response };
     if (override === 'stale')     return { kind: 'stale',     response, province: form.province_code, programLabel: 'Mar 2026 program' };
     return detected;
@@ -220,14 +246,14 @@ export function Calculator(): JSX.Element {
           </FieldRow>
           <FieldRow>
             <Field
-              label="Money factor"
+              label="Lease rate (APR)"
               hint={
                 <>
-                  APR: <span className="mono">{(Number(form.money_factor) * 2400).toFixed(2)}%</span>
+                  Money factor: <span className="mono">{moneyFactorHint(form.apr)}</span> · captive subvented
                 </>
               }
             >
-              <NumericInput value={form.money_factor} onChange={(v) => update('money_factor', v)} />
+              <PercentInput value={form.apr} onChange={(v) => update('apr', v)} />
             </Field>
             <Field label="Term (months)">
               <select
@@ -406,6 +432,36 @@ function NumericInput({
 }
 
 
+function PercentInput({
+  value, onChange,
+}: {
+  value:    string;
+  onChange: (v: string) => void;
+}): JSX.Element {
+  return (
+    <div className={`${inputStyles.affix} ${inputStyles.affixRight}`}>
+      <span>%</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        className={inputStyles.input}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+
+// ── APR → MF caption ────────────────────────────────────────────────────
+
+function moneyFactorHint(apr: string): string {
+  const n = parseApr(apr);
+  if (!Number.isFinite(n)) return '—';
+  return aprToMoneyFactor(n).toFixed(5);
+}
+
+
 // ── Validation gate ─────────────────────────────────────────────────────
 
 function isFormReady(form: typeof DEFAULTS): boolean {
@@ -416,13 +472,16 @@ function isFormReady(form: typeof DEFAULTS): boolean {
     return Number.isFinite(n) ? n : NaN;
   };
 
+  const apr = numeric(form.apr);
+
   return (
     numeric(form.msrp)             > 0 &&
     numeric(form.freight_pdi)      >= 0 &&
     numeric(form.cap_cost)         > 0 &&
     numeric(form.residual_percent) > 0 &&
     numeric(form.residual_percent) < 1 &&
-    numeric(form.money_factor)     >= 0 &&
+    apr                            >= APR_MIN &&
+    apr                            <= APR_MAX &&
     form.term_months               > 0 &&
     form.annual_km                 > 0 &&
     PROVINCES.includes(form.province_code)
