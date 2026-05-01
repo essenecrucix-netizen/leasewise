@@ -1,0 +1,77 @@
+/* globals.css — base body styles. References CSS custom properties
+   defined in /public/tokens.css, which is loaded via a <link> tag in
+   src/app/layout.tsx (Next/Turbopack does not allow server-relative
+   imports here). Keep this file lean: anything visual should use a
+   CSS custom property defined in tokens.css. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numerics for any element marked .mono — payments, MF, residuals.
+   Per CLAUDE.md: "All monetary values use the mono font." */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Resets that the design-phase pages assume */
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+input, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+a { color: inherit; }
+
+/* Page container — matches the design-phase .container width. */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Headings — mirrors the design-phase typographic scale. */
+.t-h1 {
+  font-family: var(--font-display);
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--text);
+  margin: 0;
+}
+
+.t-body-l {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.t-body-s {
+  font-size: 12px;
+}
+.c-secondary { color: var(--text-secondary); }
+.c-muted     { color: var(--text-muted); }
+.c-faint     { color: var(--text-faint); }
