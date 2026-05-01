@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Logo & brand — LeaseWise Canada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="chrome.css" />
+<link rel="stylesheet" href="homepage.css" />
+<style>
+  body { background: var(--surface); color: var(--text); }
+  .lp { padding: 64px 0; }
+  .lp h1 { font-family: var(--font-display); font-size: 64px; line-height: 1; letter-spacing: -0.02em; font-weight: 500; margin: 0 0 8px; }
+  .lp h2 { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin: 48px 0 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .lock-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 16px; }
+  .lock { padding: 32px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); display: flex; align-items: center; justify-content: center; min-height: 140px; flex-direction: column; gap: 16px; }
+  .lock--light { background: #FAFAF6; }
+  .lock--lime { background: var(--lime); }
+  .lock--label { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .lock--light .lock--label { color: rgba(0,0,0,0.5); }
+  .lock--lime .lock--label { color: rgba(0,0,0,0.65); }
+
+  .icon-grid { display: flex; gap: 24px; flex-wrap: wrap; align-items: end; }
+  .icon-tile { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .icon-tile span { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  .lw-mark { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.02em; line-height: 1;
+    display: inline-flex; align-items: baseline; }
+  .lw-mark .dot { color: var(--lime); margin-left: 0.05em; }
+  .lock--light .lw-mark { color: #0B0E0C; }
+  .lock--lime .lw-mark { color: #0B0E0C; }
+  .lock--lime .lw-mark .dot { color: #0B0E0C; }
+
+  .stack { display: flex; flex-direction: column; gap: 8px; }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; }
+  .sw { padding: 24px; border-radius: var(--radius); border: 1px solid var(--border); }
+  .sw__hex { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+  .sw__name { font-family: var(--font-display); font-weight: 600; font-size: 18px; }
+
+  .typespec { display: grid; grid-template-columns: 200px 1fr; gap: 24px; padding: 16px 0; border-top: 1px solid var(--border-soft); align-items: baseline; }
+  .typespec__meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="chrome.jsx"></script>
+<script type="text/babel">
+const { Header: LHeader, Footer: LFooter, useTheme: lTheme } = window;
+
+function Mark({ size=40 }) {
+  return <span className="lw-mark" style={{fontSize:size}}>LeaseWise<span className="dot">.</span></span>;
+}
+
+function DotMark({ size=64, bg='#0B0E0C', dot='#C4F042', radius }) {
+  const r = radius != null ? radius : size * 0.22;
+  // Dot scaled to ~22% of tile, positioned bottom-right with margin
+  const dotR = size * 0.11;
+  const cx = size - dotR - size * 0.12;
+  const cy = size - dotR - size * 0.12;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <rect x="0" y="0" width={size} height={size} rx={r} fill={bg} />
+      <circle cx={cx} cy={cy} r={dotR} fill={dot} />
+    </svg>
+  );
+}
+
+function ClearspaceDemo() {
+  // Wordmark with tinted X-cap clearspace shown around it
+  return (
+    <svg width="420" height="120" viewBox="0 0 420 120">
+      <rect x="0" y="0" width="420" height="120" fill="#0B0E0C" />
+      <rect x="40" y="20" width="340" height="80" fill="rgba(196,240,66,0.06)" stroke="#C4F042" strokeDasharray="3 4" strokeOpacity="0.5"/>
+      <rect x="80" y="40" width="260" height="40" fill="none" stroke="rgba(255,255,255,0.15)" strokeDasharray="2 3"/>
+      <text x="80" y="73" fontFamily="Space Grotesk" fontSize="36" fontWeight="500" fill="#FAFAF6" letterSpacing="-0.5">LeaseWise</text>
+      <circle cx="282" cy="68" r="4" fill="#C4F042"/>
+      <text x="40" y="14" fontFamily="JetBrains Mono" fontSize="9" fill="rgba(255,255,255,0.5)">CLEARSPACE = HEIGHT OF "L"</text>
+      <line x1="80" y1="40" x2="80" y2="20" stroke="rgba(255,255,255,0.3)" strokeDasharray="2"/>
+      <line x1="80" y1="20" x2="40" y2="20" stroke="rgba(255,255,255,0.3)" strokeDasharray="2"/>
+    </svg>
+  );
+}
+
+function ProhibitedTile({ children, label }) {
+  return (
+    <div style={{padding:24, border:'1px solid var(--border)', borderRadius:'var(--radius)',
+      background:'var(--surface)', display:'flex', flexDirection:'column', alignItems:'center', gap:12, position:'relative'}}>
+      <div style={{position:'absolute', top:8, right:8, width:20, height:20, borderRadius:'50%',
+        background:'var(--blood-orange)', color:'#FAFAF6', fontSize:11, fontWeight:600,
+        display:'flex', alignItems:'center', justifyContent:'center'}}>×</div>
+      {children}
+      <span style={{fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', textAlign:'center'}}>{label}</span>
+    </div>
+  );
+}
+
+function Wordmark({ stacked }) {
+  if (stacked) return (
+    <span className="lw-mark" style={{flexDirection:'column',alignItems:'flex-start',fontSize:36,gap:0}}>
+      <span>Lease</span><span>Wise<span className="dot">.</span></span>
+    </span>
+  );
+  return <Mark size={36} />;
+}
+
+function FavIcon({ bg, fg, size=64, accent }) {
+  const r = size * 0.18;
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64">
+      <rect x="0" y="0" width="64" height="64" rx={r} fill={bg} />
+      <text x="32" y="44" textAnchor="middle" fontFamily="Space Grotesk" fontWeight="600" fontSize="32" fill={fg} letterSpacing="-1">LW</text>
+      <circle cx="51" cy="42" r="3.5" fill={accent} />
+    </svg>
+  );
+}
+
+function AppIcon({ size=120, variant='dark' }) {
+  const bg = variant==='dark' ? '#0B0E0C' : variant==='lime' ? '#C4F042' : '#FAFAF6';
+  const fg = variant==='lime' ? '#0B0E0C' : variant==='light' ? '#0B0E0C' : '#FAFAF6';
+  const accent = variant==='lime' ? '#0B0E0C' : '#C4F042';
+  const r = size * 0.22;
+  return (
+    <svg width={size} height={size} viewBox="0 0 120 120">
+      <rect x="0" y="0" width="120" height="120" rx={r} fill={bg} />
+      <text x="60" y="78" textAnchor="middle" fontFamily="Space Grotesk" fontWeight="500" fontSize="56" fill={fg} letterSpacing="-2">LW</text>
+      <circle cx="92" cy="74" r="5" fill={accent} />
+    </svg>
+  );
+}
+
+function LogoApp() {
+  const [theme, toggle] = lTheme();
+  return (
+    <div className="lw-app">
+      <LHeader active="learn" theme={theme} onToggleTheme={toggle} />
+      <main id="main">
+        <div className="container lp">
+          <span className="eyebrow">Brand · /brand</span>
+          <h1>The mark.</h1>
+          <p className="t-body-l c-secondary" style={{maxWidth:'60ch',margin:'8px 0 0'}}>
+            LeaseWise + a lime period. The dot is the index dot from the floorplan ticker — the brand's promise to publish data, not opinion.
+          </p>
+
+          <h2>Primary lockups</h2>
+          <div className="lock-grid">
+            <div className="lock">
+              <Mark size={42} />
+              <span className="lock--label">Primary · dark</span>
+            </div>
+            <div className="lock lock--light">
+              <Mark size={42} />
+              <span className="lock--label">Primary · light</span>
+            </div>
+            <div className="lock lock--lime">
+              <Mark size={42} />
+              <span className="lock--label">Primary · lime</span>
+            </div>
+            <div className="lock">
+              <Wordmark stacked />
+              <span className="lock--label">Stacked</span>
+            </div>
+          </div>
+
+          <h2>Favicon · 64px</h2>
+          <div className="icon-grid">
+            <div className="icon-tile">
+              <FavIcon bg="#0B0E0C" fg="#FAFAF6" accent="#C4F042" size={64} />
+              <span>Default</span>
+            </div>
+            <div className="icon-tile">
+              <FavIcon bg="#C4F042" fg="#0B0E0C" accent="#0B0E0C" size={64} />
+              <span>Lime</span>
+            </div>
+            <div className="icon-tile">
+              <FavIcon bg="#FAFAF6" fg="#0B0E0C" accent="#C4F042" size={64} />
+              <span>Light</span>
+            </div>
+            <div className="icon-tile">
+              <FavIcon bg="#0B0E0C" fg="#FAFAF6" accent="#C4F042" size={32} />
+              <span>32px</span>
+            </div>
+            <div className="icon-tile">
+              <FavIcon bg="#0B0E0C" fg="#FAFAF6" accent="#C4F042" size={16} />
+              <span>16px</span>
+            </div>
+          </div>
+
+          <h2>App icon · iOS / Android</h2>
+          <div className="icon-grid">
+            <div className="icon-tile"><AppIcon variant="dark" /><span>Dark</span></div>
+            <div className="icon-tile"><AppIcon variant="lime" /><span>Lime</span></div>
+            <div className="icon-tile"><AppIcon variant="light" /><span>Light</span></div>
+          </div>
+
+          <h2>Mark variants — the lime dot alone</h2>
+          <p className="t-body-l c-secondary" style={{marginTop:0,maxWidth:'60ch'}}>The dot is the brand. When space is tight or context already names us, the lockup drops everything except the dot on a tile.</p>
+          <div className="icon-grid" style={{marginTop:24}}>
+            <div className="icon-tile">
+              <DotMark size={192} bg="#0B0E0C" dot="#C4F042" />
+              <span>192 · App icon · ink</span>
+            </div>
+            <div className="icon-tile">
+              <DotMark size={64} bg="#0B0E0C" dot="#C4F042" />
+              <span>64 · favicon · ink</span>
+            </div>
+            <div className="icon-tile">
+              <DotMark size={32} bg="#0B0E0C" dot="#C4F042" />
+              <span>32</span>
+            </div>
+            <div className="icon-tile">
+              <DotMark size={16} bg="#0B0E0C" dot="#C4F042" radius={2}/>
+              <span>16 · min legible</span>
+            </div>
+            <div className="icon-tile">
+              <DotMark size={64} bg="#C4F042" dot="#0B0E0C" />
+              <span>Lime · ink dot</span>
+            </div>
+            <div className="icon-tile">
+              <DotMark size={64} bg="#C4F042" dot="#C4F042" />
+              <span>Lime on lime · do not use</span>
+            </div>
+          </div>
+
+          <h2>Clearspace + minimum size</h2>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginTop:8}}>
+            <div className="lock" style={{justifyContent:'flex-start',alignItems:'flex-start',padding:0,overflow:'hidden'}}>
+              <ClearspaceDemo />
+              <div style={{padding:'12px 16px'}}>
+                <span className="lock--label">Reserve clearspace = height of capital "L" on every side. No copy or imagery inside.</span>
+              </div>
+            </div>
+            <div className="lock">
+              <div style={{display:'flex',alignItems:'baseline',gap:24}}>
+                <Mark size={12} />
+                <Mark size={18} />
+                <Mark size={24} />
+              </div>
+              <span className="lock--label">Minimum 18px on screen · 12pt in print. Below 12px, switch to the dot mark.</span>
+            </div>
+          </div>
+
+          <h2>Prohibited treatments</h2>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:16}}>
+            <ProhibitedTile label="Don't stretch">
+              <span className="lw-mark" style={{fontSize:36, transform:'scaleX(1.5)'}}>LeaseWise<span className="dot">.</span></span>
+            </ProhibitedTile>
+            <ProhibitedTile label="Don't recolour the dot">
+              <span className="lw-mark" style={{fontSize:36}}>LeaseWise<span className="dot" style={{color:'#FF7A45'}}>.</span></span>
+            </ProhibitedTile>
+            <ProhibitedTile label="Don't add effects">
+              <span className="lw-mark" style={{fontSize:36, textShadow:'2px 2px 0 #C4F042', filter:'drop-shadow(0 0 8px #C4F042)'}}>LeaseWise<span className="dot">.</span></span>
+            </ProhibitedTile>
+            <ProhibitedTile label="Don't drop the dot">
+              <span className="lw-mark" style={{fontSize:36}}>LeaseWise</span>
+            </ProhibitedTile>
+            <ProhibitedTile label="Don't outline">
+              <span className="lw-mark" style={{fontSize:36, color:'transparent', WebkitTextStroke:'1px #FAFAF6'}}>LeaseWise<span className="dot" style={{WebkitTextStroke:0,color:'#C4F042'}}>.</span></span>
+            </ProhibitedTile>
+            <ProhibitedTile label="Don't tilt">
+              <span className="lw-mark" style={{fontSize:36, transform:'rotate(-8deg)'}}>LeaseWise<span className="dot">.</span></span>
+            </ProhibitedTile>
+          </div>
+
+          <h2>Color</h2>
+          <div className="swatches">
+            <div className="sw" style={{background:'#0B0E0C',color:'#FAFAF6'}}>
+              <div className="sw__name">Ink</div>
+              <div className="sw__hex">#0B0E0C</div>
+            </div>
+            <div className="sw" style={{background:'#FAFAF6',color:'#0B0E0C'}}>
+              <div className="sw__name">Paper</div>
+              <div className="sw__hex">#FAFAF6</div>
+            </div>
+            <div className="sw" style={{background:'#C4F042',color:'#0B0E0C'}}>
+              <div className="sw__name">Lime</div>
+              <div className="sw__hex">#C4F042</div>
+            </div>
+            <div className="sw" style={{background:'#FF7A45',color:'#0B0E0C'}}>
+              <div className="sw__name">Blood orange</div>
+              <div className="sw__hex">#FF7A45</div>
+            </div>
+            <div className="sw" style={{background:'#3DD68C',color:'#0B0E0C'}}>
+              <div className="sw__name">Emerald</div>
+              <div className="sw__hex">#3DD68C</div>
+            </div>
+            <div className="sw" style={{background:'#FFD23F',color:'#0B0E0C'}}>
+              <div className="sw__name">Amber</div>
+              <div className="sw__hex">#FFD23F</div>
+            </div>
+          </div>
+
+          <h2>Type</h2>
+          <div className="typespec">
+            <div className="typespec__meta">Display · Space Grotesk</div>
+            <div style={{fontFamily:'Space Grotesk',fontSize:64,lineHeight:1,letterSpacing:'-0.02em',fontWeight:500}}>
+              Stop guessing. Start auditing.
+            </div>
+          </div>
+          <div className="typespec">
+            <div className="typespec__meta">UI · Inter</div>
+            <div style={{fontFamily:'Inter',fontSize:18,lineHeight:1.5}}>
+              Real numbers, real Canadians. Provincial tax math built in. We show our sources.
+            </div>
+          </div>
+          <div className="typespec">
+            <div className="typespec__meta">Mono · JetBrains Mono</div>
+            <div style={{fontFamily:'JetBrains Mono',fontSize:18,lineHeight:1.4}}>
+              $748/mo · 39 mo · 16,000 km · MF 0.00166 (3.99% APR) · Residual 59%
+            </div>
+          </div>
+        </div>
+      </main>
+      <LFooter />
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<LogoApp />);
+</script>
+</body>
+</html>

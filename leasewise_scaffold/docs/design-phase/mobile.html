@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobile & tablet — LeaseWise Canada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  body { margin: 0; background: #161614; color: #FAFAF6; font-family: var(--font-ui); }
+  .mob-screen { background: #0B0E0C; color: #FAFAF6; height: 100%; overflow-y: auto;
+    font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+  .mob-screen * { box-sizing: border-box; }
+  .mob-pad { padding: 0 20px; }
+
+  .mob-header { display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  .mob-logo { font-family: var(--font-display); font-size: 18px; font-weight: 500; letter-spacing: -0.02em; }
+  .mob-logo .dot { color: var(--lime); }
+  .mob-menu { font-size: 22px; }
+
+  .mob-eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .mob-h1 { font-family: var(--font-display); font-size: 38px; line-height: 1; letter-spacing: -0.025em; font-weight: 500; margin: 8px 0 12px; }
+  .mob-sub { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+
+  .mob-ticker { display: flex; gap: 12px; overflow-x: auto; padding: 12px 20px;
+    border-bottom: 1px solid var(--border); scrollbar-width: none; }
+  .mob-ticker::-webkit-scrollbar { display: none; }
+  .mob-tick { white-space: nowrap; font-family: var(--font-mono); font-size: 12px; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 999px; flex-shrink: 0; }
+  .mob-tick .lime { color: var(--lime); }
+  .mob-tick .orange { color: var(--blood-orange); }
+
+  .mob-card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px; margin: 12px 0; }
+  .mob-row { display: flex; justify-content: space-between; padding: 8px 0;
+    border-bottom: 1px solid var(--border-soft); font-size: 13px; }
+  .mob-row:last-child { border-bottom: 0; }
+  .mob-row.lbl { color: var(--text-muted); }
+  .mob-row .mono { font-family: var(--font-mono); }
+
+  .mob-pill { display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 8px; border-radius: 999px; font-size: 11px; font-family: var(--font-mono); }
+  .pill-good { background: rgba(61,214,140,0.15); color: var(--emerald); }
+  .pill-bad { background: rgba(255,122,69,0.15); color: var(--blood-orange); }
+
+  .mob-segctrl { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .mob-segctrl button { flex: 1; padding: 8px; background: transparent; border: 0; color: var(--text-muted);
+    font-family: inherit; font-size: 12px; }
+  .mob-segctrl .on { background: var(--lime); color: #0B0E0C; font-weight: 500; }
+
+  .mob-input { width: 100%; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); font-family: var(--font-mono); font-size: 16px; }
+
+  .mob-payment { background: var(--lime); color: #0B0E0C; border-radius: 16px; padding: 16px; margin-top: 12px; }
+  .mob-payment .num { font-family: var(--font-display); font-size: 44px; line-height: 1; font-weight: 500; letter-spacing: -0.02em; }
+
+  .mob-tabbar { display: flex; border-top: 1px solid var(--border); background: var(--surface);
+    padding: 8px 0 24px; position: sticky; bottom: 0; }
+  .mob-tabbar a { flex: 1; text-align: center; font-size: 10px; color: var(--text-muted); text-decoration: none;
+    text-transform: uppercase; letter-spacing: 0.06em; padding: 4px; }
+  .mob-tabbar a.on { color: var(--lime); }
+  .mob-tabbar .ico { display:block; font-size: 18px; margin-bottom: 2px; }
+
+  .stage { background: #161614; padding: 40px 20px; }
+  .stage-title { font-family: var(--font-display); font-size: 14px; color: var(--text-muted); margin-bottom: 16px; text-align: center; text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* Tablet styles */
+  .tab-screen { background: #0B0E0C; color: #FAFAF6; height: 100%; overflow-y: auto; padding: 24px; }
+  .tab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .tab-h1 { font-family: var(--font-display); font-size: 56px; line-height: 0.95; letter-spacing: -0.025em; font-weight: 500; margin: 12px 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const { IOSDevice } = window;
+
+function MobileHome() {
+  return (
+    <div className="mob-screen">
+      <div className="mob-header">
+        <div className="mob-logo">LeaseWise<span className="dot">.</span></div>
+        <div className="mob-menu">≡</div>
+      </div>
+      <div className="mob-ticker">
+        <div className="mob-tick">RX 350 ON · <span className="lime">$682</span> ↓</div>
+        <div className="mob-tick">CR-V Hybrid · <span className="lime">$524</span> ↓</div>
+        <div className="mob-tick">X3 30i · <span className="orange">$748</span> ↑</div>
+        <div className="mob-tick">GLC 300 · <span className="orange">$812</span> ↑</div>
+      </div>
+      <div className="mob-pad" style={{paddingTop:24, paddingBottom:24}}>
+        <span className="mob-eyebrow">April 2026 · western canada</span>
+        <h1 className="mob-h1">Know what dealers know.</h1>
+        <p className="mob-sub">The Canadian leasing knowledge base. Real numbers, real people. We show our sources.</p>
+      </div>
+
+      <div className="mob-pad" style={{paddingBottom: 16}}>
+        <div className="mob-eyebrow" style={{marginBottom:8}}>Featured · audit</div>
+        <div className="mob-card">
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+            <strong style={{fontSize:14}}>2026 BMW X3 xDrive30i</strong>
+            <span className="mob-pill pill-good">A · P84</span>
+          </div>
+          <div style={{fontSize:11, color:'var(--text-muted)', marginTop:4}}>Anonymous · Calgary AB · Apr 18</div>
+          <div style={{fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text-muted)', marginTop:12}}>
+            $698/mo · 39mo · 16k km · MF .00166 · 59% RV
+          </div>
+        </div>
+      </div>
+
+      <div className="mob-pad">
+        <div className="mob-eyebrow" style={{marginBottom:8}}>Active programs</div>
+        {[
+          ['BMW · X3 30i', '3.99%', '59%', 'Apr 30'],
+          ['Lexus · RX 350', '5.99%', '57%', 'May 1'],
+          ['Honda · CR-V Hyb', '4.49%', '63%', 'Apr 30'],
+          ['Hyundai · IONIQ 5', '0.99%', '54%', 'Apr 30'],
+        ].map(([n,r,res,exp])=>(
+          <div className="mob-card" key={n} style={{padding:12, marginTop:8}}>
+            <div style={{fontWeight:500, fontSize:14}}>{n}</div>
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:8,fontFamily:'var(--font-mono)',fontSize:12}}>
+              <span><span style={{color:'var(--text-muted)'}}>RATE</span> {r}</span>
+              <span><span style={{color:'var(--text-muted)'}}>RV</span> {res}</span>
+              <span style={{color:'var(--blood-orange)'}}>{exp}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{height: 24}}></div>
+
+      <div className="mob-tabbar">
+        <a href="#" className="on"><span className="ico">●</span>Home</a>
+        <a href="#"><span className="ico">▤</span>Tools</a>
+        <a href="#"><span className="ico">◌</span>Forum</a>
+        <a href="#"><span className="ico">▦</span>Intel</a>
+        <a href="#"><span className="ico">○</span>You</a>
+      </div>
+    </div>
+  );
+}
+
+function MobileCalc() {
+  return (
+    <div className="mob-screen">
+      <div className="mob-header">
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{color:'var(--text-muted)'}}>‹</span>
+          <span style={{fontWeight:500,fontSize:15}}>Lease Calculator</span>
+        </div>
+        <span style={{fontSize:12, color:'var(--text-muted)'}}>Save</span>
+      </div>
+
+      <div className="mob-pad" style={{paddingTop:16}}>
+        <div className="mob-eyebrow">01 · Vehicle</div>
+        <div className="mob-card">
+          <div className="mob-row"><span className="lbl">Preset</span><span className="mono">2026 BMW X3 30i</span></div>
+          <div className="mob-row"><span className="lbl">MSRP</span><span className="mono">$62,400</span></div>
+          <div className="mob-row"><span className="lbl">Selling</span><span className="mono">$58,900</span></div>
+        </div>
+
+        <div className="mob-eyebrow" style={{marginTop:24}}>02 · Money</div>
+        <div className="mob-card">
+          <div style={{marginBottom:12}}>
+            <div className="lbl" style={{fontSize:11,marginBottom:6}}>Term</div>
+            <div className="mob-segctrl">
+              <button>24</button><button>36</button><button className="on">39</button><button>48</button>
+            </div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <div className="lbl" style={{fontSize:11,marginBottom:6}}>Money factor</div>
+            <input className="mob-input" defaultValue="0.00166" />
+            <div style={{fontSize:11, color:'var(--text-muted)', fontFamily:'var(--font-mono)', marginTop:4}}>= 3.99% APR · matches captive</div>
+          </div>
+          <div>
+            <div className="lbl" style={{fontSize:11,marginBottom:6}}>Residual</div>
+            <input className="mob-input" defaultValue="59" />
+          </div>
+        </div>
+
+        <div className="mob-eyebrow" style={{marginTop:24}}>03 · Province</div>
+        <div className="mob-card" style={{padding:0}}>
+          <div className="mob-segctrl" style={{border:0, borderRadius:0}}>
+            <button>BC</button><button className="on">AB</button><button>ON</button><button>QC</button>
+          </div>
+        </div>
+
+        <div className="mob-payment">
+          <div style={{fontSize:11, fontFamily:'var(--font-mono)', textTransform:'uppercase', letterSpacing:'0.06em'}}>Monthly · taxes in</div>
+          <div className="num">$698</div>
+          <div style={{fontSize:11, fontFamily:'var(--font-mono)', marginTop:8, opacity:0.7}}>
+            Drive-off $1,420 · Total $27,222 · GST 5%
+          </div>
+        </div>
+      </div>
+
+      <div style={{height:60}}></div>
+    </div>
+  );
+}
+
+function MobileGrade() {
+  return (
+    <div className="mob-screen">
+      <div className="mob-header">
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{color:'var(--text-muted)'}}>‹</span>
+          <span style={{fontWeight:500,fontSize:15}}>Deal Rater</span>
+        </div>
+        <span style={{fontSize:12, color:'var(--lime)'}}>Share</span>
+      </div>
+      <div className="mob-pad" style={{paddingTop:24}}>
+        <span className="mob-eyebrow">Result · BMW X3 30i</span>
+        <div style={{display:'flex',alignItems:'center',gap:16,marginTop:12}}>
+          <div style={{fontFamily:'var(--font-display)', fontSize:96, lineHeight:1, color:'var(--emerald)', fontWeight:500, letterSpacing:'-0.04em'}}>A</div>
+          <div>
+            <div style={{fontFamily:'var(--font-display)', fontSize:24, fontWeight:600, lineHeight:1.1}}>Strong deal.</div>
+            <div style={{fontFamily:'var(--font-mono)', fontSize:14, color:'var(--text-muted)', marginTop:4}}>P84 · top 16%</div>
+          </div>
+        </div>
+
+        <div className="mob-card" style={{borderLeft:'3px solid var(--emerald)', marginTop:24}}>
+          <strong style={{fontSize:13}}>Money factor matches the captive.</strong>
+          <p style={{fontSize:13, color:'var(--text-secondary)', margin:'6px 0 0', lineHeight:1.5}}>
+            0.00166 = 3.99% APR — that's BMW Financial's subvented rate for April 2026 on this trim.
+          </p>
+        </div>
+        <div className="mob-card" style={{borderLeft:'3px solid var(--amber)'}}>
+          <strong style={{fontSize:13}}>Watch the F&I office.</strong>
+          <p style={{fontSize:13, color:'var(--text-secondary)', margin:'6px 0 0', lineHeight:1.5}}>
+            39mo gives a longer runway to upsell extended warranty. Walk in with our F&I decoder.
+          </p>
+        </div>
+        <div className="mob-card" style={{borderLeft:'3px solid var(--emerald)'}}>
+          <strong style={{fontSize:13}}>Discount is solid.</strong>
+          <p style={{fontSize:13, color:'var(--text-secondary)', margin:'6px 0 0', lineHeight:1.5}}>
+            $3,500 off MSRP plus $1,500 loyalty puts your effective discount at 8% — close to the BMW Western Canada median.
+          </p>
+        </div>
+      </div>
+      <div style={{height:60}}></div>
+    </div>
+  );
+}
+
+function TabletHome() {
+  return (
+    <div className="tab-screen">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:32}}>
+        <div className="mob-logo" style={{fontSize:22}}>LeaseWise<span className="dot">.</span></div>
+        <div style={{display:'flex',gap:24,fontSize:14,color:'var(--text-secondary)'}}>
+          <span style={{color:'var(--text)'}}>Tools</span>
+          <span>Community</span>
+          <span>Intel</span>
+          <span>Learn</span>
+        </div>
+      </div>
+      <span className="mob-eyebrow">April 2026 · western canada</span>
+      <h1 className="tab-h1">Know what<br/>dealers know.</h1>
+      <p style={{fontSize:18, color:'var(--text-secondary)', maxWidth:'40ch', margin:'0 0 32px'}}>
+        The Canadian leasing knowledge base. Real numbers. Real people. We show our sources.
+      </p>
+
+      <div className="tab-grid">
+        <div className="mob-card" style={{padding:24}}>
+          <div className="mob-eyebrow">Calculator</div>
+          <div style={{fontFamily:'var(--font-display)', fontSize:24, fontWeight:600, margin:'8px 0'}}>$698<span style={{fontSize:14,color:'var(--text-muted)'}}>/mo</span></div>
+          <div style={{fontSize:12, color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>X3 30i · 39mo · AB</div>
+        </div>
+        <div className="mob-card" style={{padding:24}}>
+          <div className="mob-eyebrow">Deal Rater</div>
+          <div style={{fontFamily:'var(--font-display)', fontSize:24, fontWeight:600, margin:'8px 0'}}>Grade A → A+</div>
+          <div style={{fontSize:12, color:'var(--text-muted)', fontFamily:'var(--font-mono)'}}>Paste worksheet → score</div>
+        </div>
+      </div>
+
+      <div className="mob-eyebrow" style={{marginTop:32, marginBottom:12}}>Active programs · 47</div>
+      <div className="tab-grid">
+        {[
+          ['BMW X3 30i', '3.99%', '$1,500'],
+          ['Lexus RX 350', '5.99%', '—'],
+          ['Honda CR-V Hyb', '4.49%', '$500'],
+          ['Hyundai IONIQ 5', '0.99%', '$5,000'],
+        ].map(([n,r,c])=>(
+          <div className="mob-card" key={n} style={{padding:16}}>
+            <div style={{display:'flex',justifyContent:'space-between'}}>
+              <strong style={{fontSize:14}}>{n}</strong>
+              <span style={{color:'var(--lime)',fontFamily:'var(--font-mono)',fontSize:13}}>{r}</span>
+            </div>
+            <div style={{fontSize:11, color:'var(--text-muted)', marginTop:6, fontFamily:'var(--font-mono)'}}>Cash {c}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="phone" title="Mobile · iPhone 15" subtitle="Homepage, calculator, and deal rater on iOS">
+        <DCArtboard id="m-home" label="Homepage" width={402} height={874}>
+          <IOSDevice dark={true} title="LeaseWise" width={402} height={874}>
+            <MobileHome />
+          </IOSDevice>
+        </DCArtboard>
+        <DCArtboard id="m-calc" label="Calculator" width={402} height={874}>
+          <IOSDevice dark={true} title="Calculator" width={402} height={874}>
+            <MobileCalc />
+          </IOSDevice>
+        </DCArtboard>
+        <DCArtboard id="m-grade" label="Deal Rater" width={402} height={874}>
+          <IOSDevice dark={true} title="Deal Rater" width={402} height={874}>
+            <MobileGrade />
+          </IOSDevice>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="tablet" title="Tablet · iPad Mini" subtitle="Reduced two-column layout">
+        <DCArtboard id="t-home" label="Tablet homepage" width={744} height={1133}>
+          <IOSDevice dark={true} title="LeaseWise" width={744} height={1133}>
+            <TabletHome />
+          </IOSDevice>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

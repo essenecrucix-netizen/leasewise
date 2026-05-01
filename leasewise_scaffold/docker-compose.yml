@@ -1,0 +1,86 @@
+# docker-compose.yml — local development orchestration
+#
+# Brings up:
+#   - postgres (with PostGIS + pg_trgm extensions)
+#   - frontend (Next.js, hot reload)
+#   - backend  (FastAPI, hot reload)
+#   - discourse (forum, optional, profile = "forum")
+#
+# Frontend reaches backend at http://backend:8000 from inside the network,
+# but at http://localhost:8000 from your browser.
+
+services:
+  postgres:
+    image: postgis/postgis:14-3.5-alpine
+    environment:
+      POSTGRES_DB:       leasewise
+      POSTGRES_USER:     leasewise
+      POSTGRES_PASSWORD: leasewise_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U leasewise -d leasewise"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT:       development
+      LOG_LEVEL:         DEBUG
+      MOCK_AUTH:         "true"
+      POSTGRES_HOST:     postgres
+      POSTGRES_DB:       leasewise
+      POSTGRES_USER:     leasewise
+      POSTGRES_PASSWORD: leasewise_dev
+    env_file:
+      - .env
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      NODE_ENV:             development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: npm run dev
+
+  # Optional: Discourse forum, only started with `docker compose --profile forum up`
+  discourse:
+    image: bitnami/discourse:latest
+    profiles: ["forum"]
+    environment:
+      DISCOURSE_DATABASE_HOST:     postgres
+      DISCOURSE_DATABASE_NAME:     discourse
+      DISCOURSE_DATABASE_USER:     leasewise
+      DISCOURSE_DATABASE_PASSWORD: leasewise_dev
+    ports:
+      - "4200:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

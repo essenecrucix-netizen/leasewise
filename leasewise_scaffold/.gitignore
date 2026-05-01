@@ -1,0 +1,64 @@
+# Environment
+.env
+.env.local
+.env.*.local
+.env.prod
+
+# Secrets
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/dist/
+frontend/.vercel
+frontend/.turbo
+frontend/coverage/
+frontend/*.tsbuildinfo
+
+# Backend (Python)
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/htmlcov/
+backend/.coverage
+backend/dist/
+backend/*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Local databases / volumes
+postgres-data/
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Attic — for "do not delete, but not active code" files
+_attic/
+
+# Output dirs from local scripts
+output/
+tmp/

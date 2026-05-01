@@ -1,0 +1,117 @@
+.rater-page { padding: var(--space-10) 0 var(--space-16); }
+.rater-grid { display: grid; grid-template-columns: 5fr 7fr; gap: var(--space-8); align-items: start; }
+@media (max-width: 1024px) { .rater-grid { grid-template-columns: 1fr; } }
+.rater-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: var(--space-6); }
+.rater-tab { appearance: none; background: transparent; border: 0; cursor: default;
+  padding: 12px 16px; color: var(--text-muted); border-bottom: 2px solid transparent;
+  font-family: inherit; font-size: 14px; font-weight: 500; }
+.rater-tab--active { color: var(--text); border-bottom-color: var(--text); }
+.rater-paste { width: 100%; min-height: 320px; padding: 16px; font-family: var(--font-mono); font-size: 13px;
+  line-height: 1.6; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius); resize: vertical; outline: none; }
+.rater-paste:focus { border-color: var(--text); }
+.rater-extract { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; padding: 16px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-top: 12px; }
+.rater-extract__row { display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft); font-size: 13px; }
+.rater-extract__row:last-child { border-bottom: 0; }
+
+.grade-card { border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius); padding: var(--space-8); }
+.grade-card__top { display: flex; align-items: center; gap: var(--space-6); margin-bottom: var(--space-6); }
+.grade-letter { font-family: var(--font-display); font-size: 156px; line-height: 1; font-weight: 500;
+  letter-spacing: -0.04em; }
+.grade-meta { flex: 1; }
+.grade-meta h2 { margin: 0; }
+.grade-meta__pct { font-family: var(--font-mono); font-size: 32px; color: var(--text); margin-top: 4px; }
+.grade-feedback { display: flex; flex-direction: column; gap: 12px; }
+.grade-fb-item { padding: 12px 14px; border-left: 3px solid var(--border); background: var(--surface-2);
+  border-radius: 4px; font-size: 13px; line-height: 1.55; }
+.grade-fb-item--good { border-left-color: var(--emerald); }
+.grade-fb-item--warn { border-left-color: var(--amber); }
+.grade-fb-item--bad  { border-left-color: var(--blood-orange); }
+.grade-fb-item strong { display:block; margin-bottom: 2px; }
+
+/* ─────────────────────────────────────────────────────────
+   Polished grade card (.dr) — promoted from round2-states.
+   Replaces the old grade-card on the live page.
+   ───────────────────────────────────────────────────────── */
+.dr {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: var(--space-8); display: flex; flex-direction: column; gap: var(--space-4);
+}
+.dr__top { display: flex; gap: var(--space-6); align-items: center; flex-wrap: wrap; }
+.dr__grade {
+  font-family: var(--font-display); font-size: clamp(96px, 14vw, 144px); line-height: 1;
+  font-weight: 500; letter-spacing: -0.045em;
+}
+.dr__head { flex: 1; min-width: 240px; }
+.dr__head h3 {
+  font-family: var(--font-display); font-size: 22px; line-height: 1.15;
+  margin: 0 0 4px; font-weight: 600; color: var(--text);
+}
+.dr__pct { font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); }
+
+.dr__compare {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px; background: var(--border-soft); border-radius: var(--radius); overflow: hidden;
+}
+@media (max-width: 480px) { .dr__compare { grid-template-columns: 1fr; } }
+.dr__comparecell { background: var(--surface-2); padding: 12px 14px; }
+.dr__comparecell-l { font-size: 10px; text-transform: uppercase;
+  color: var(--text-muted); letter-spacing: 0.06em; font-weight: 500; }
+.dr__comparecell-v { font-family: var(--font-mono); font-size: 18px;
+  color: var(--text); font-weight: 500; margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+.dr__fb { display: flex; flex-direction: column; gap: 8px; }
+.dr__fbitem {
+  padding: 12px 14px; font-size: 13px; line-height: 1.55;
+  border-left: 3px solid var(--border); background: var(--surface-2);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+}
+.dr__fbitem strong { display: block; font-size: 13px; margin-bottom: 2px; color: var(--text); }
+.dr__fbitem--good { border-left-color: var(--emerald); }
+.dr__fbitem--warn { border-left-color: var(--amber); }
+.dr__fbitem--bad  { border-left-color: var(--blood-orange); }
+
+.dr__sample {
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono); padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Input area (paste/upload/manual tabs) */
+.dr__input-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+.dr__input-tab {
+  appearance: none; background: transparent; border: 0; cursor: default;
+  padding: 12px 16px; color: var(--text-muted); border-bottom: 2px solid transparent;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+}
+.dr__input-tab--active { color: var(--text); border-bottom-color: var(--text); }
+.dr__textarea {
+  width: 100%; min-height: 320px; padding: 16px; font-family: var(--font-mono);
+  font-size: 13px; line-height: 1.6; background: var(--surface-2);
+  color: var(--text); border: 1px solid var(--border); border-radius: var(--radius);
+  resize: vertical; outline: none;
+}
+.dr__textarea:focus { border-color: var(--text); }
+.dr__dropzone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 80px 24px; text-align: center; color: var(--text-muted);
+  background: var(--surface-2);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.dr__dropzone--hover { border-color: var(--lime); background: rgba(196,240,66,0.04); }
+
+/* Confidence / parse-incomplete state */
+.dr__gap-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface-2); border-radius: var(--radius);
+  font-size: 13px;
+}
+.dr__gap-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); flex-shrink: 0; }
+.dr__gap-cta { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }

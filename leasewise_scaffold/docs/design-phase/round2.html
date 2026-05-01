@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>LeaseWise — Round 2 deliverables</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="round2.css">
+<style>
+  body { margin: 0; background: #0A0A0A; }
+  /* Override design-canvas bg to ink so dark artboards merge cleanly */
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="round2-states.jsx"></script>
+<script type="text/babel" src="round2-mobile.jsx"></script>
+<script type="text/babel" src="round2-system.jsx"></script>
+<script type="text/babel" src="round3.jsx"></script>
+<script type="text/babel">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const {
+  COCEmpty, COCLoading, COCSuccess, COCWarning, COCEdge, COCError, COCStale,
+  DREmpty, DRParsing, DRA, DRB, DRD, DRConfidence, DRError,
+  MobHome, MobCalc, MobRater, MobForum, MobBrand,
+  SourcesPage, ComponentStates, IconographyPage, BrandMarks,
+  R2Responses, LightHomepage, LightCalculator,
+  BMWFullBrand, MobThread,
+} = window;
+
+function App() {
+  return (
+    <DesignCanvas>
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="r2-intro" title="Round 2 deliverables" subtitle="State matrices, mobile artboards, system pages, light mode, and design responses to open questions.">
+        <DCArtboard id="intro" label="Read me first" width={720} height={420}>
+          <div style={{padding:'48px 56px', background:'var(--ink)', color:'var(--paper)', height:'100%', boxSizing:'border-box'}}>
+            <div style={{fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:'0.08em', textTransform:'uppercase', color:'rgba(255,255,255,0.5)', marginBottom:12}}>Round 2 · Apr 2026</div>
+            <h1 style={{fontFamily:'var(--font-display)', fontSize:40, fontWeight:500, letterSpacing:'-0.025em', margin:'0 0 16px', lineHeight:1.05}}>What's in this canvas</h1>
+            <ol style={{fontSize:14, lineHeight:1.7, color:'rgba(255,255,255,0.85)', paddingLeft:20, margin:0}}>
+              <li>Calculator output card · 7 states (empty → stale)</li>
+              <li>Deal Rater · 7 states (input → couldn't parse)</li>
+              <li>Mobile · 5 artboards at 375px (no device frame)</li>
+              <li>System · sources, components, icons, logo</li>
+              <li>Light mode · homepage hero + calculator</li>
+              <li>Six open questions, with design responses</li>
+            </ol>
+            <p style={{fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:24, fontFamily:'var(--font-mono)'}}>
+              Drag artboards to reorder · click any artboard to focus
+            </p>
+          </div>
+        </DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="coc" title="Calculator output card" subtitle="Every state of the payment summary surface in the calculator.">
+        <DCArtboard id="coc-empty"   label="01 · Empty"      width={456} height={620}><COCEmpty/></DCArtboard>
+        <DCArtboard id="coc-loading" label="02 · Loading"    width={456} height={620}><COCLoading/></DCArtboard>
+        <DCArtboard id="coc-success" label="03 · Success"    width={456} height={620}><COCSuccess/></DCArtboard>
+        <DCArtboard id="coc-warning" label="04 · Warning"    width={456} height={620}><COCWarning/></DCArtboard>
+        <DCArtboard id="coc-edge"    label="05 · BC luxury"  width={456} height={620}><COCEdge/></DCArtboard>
+        <DCArtboard id="coc-error"   label="06 · No program" width={456} height={620}><COCError/></DCArtboard>
+        <DCArtboard id="coc-stale"   label="07 · Stale"      width={456} height={620}><COCStale/></DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="rater" title="Deal Rater states" subtitle="Paste → grade pipeline, with the failure modes treated as first-class.">
+        <DCArtboard id="dr-empty"      label="01 · Empty"          width={576} height={680}><DREmpty/></DCArtboard>
+        <DCArtboard id="dr-parsing"    label="02 · Parsing"        width={576} height={680}><DRParsing/></DCArtboard>
+        <DCArtboard id="dr-a"          label="03 · A · P84"        width={576} height={680}><DRA/></DCArtboard>
+        <DCArtboard id="dr-b"          label="04 · B · P61"        width={576} height={680}><DRB/></DCArtboard>
+        <DCArtboard id="dr-d"          label="05 · D · markup"     width={576} height={680}><DRD/></DCArtboard>
+        <DCArtboard id="dr-confidence" label="06 · Low confidence" width={576} height={680}><DRConfidence/></DCArtboard>
+        <DCArtboard id="dr-error"      label="07 · Couldn't parse" width={576} height={680}><DRError/></DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="mobile" title="Mobile · 375px" subtitle="Five canonical screens at the iPhone 14 / Pixel viewport. No device chrome — these are the responsive web layouts.">
+        <DCArtboard id="m-home"   label="Homepage"   width={423} height={1016}><MobHome/></DCArtboard>
+        <DCArtboard id="m-calc"   label="Calculator" width={423} height={976}><MobCalc/></DCArtboard>
+        <DCArtboard id="m-rater"  label="Deal Rater" width={423} height={936}><MobRater/></DCArtboard>
+        <DCArtboard id="m-forum"  label="Forum"      width={423} height={856}><MobForum/></DCArtboard>
+        <DCArtboard id="m-brand"  label="BMW brand"  width={423} height={976}><MobBrand/></DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="system" title="Design system" subtitle="Sources/transparency, component states matrix, iconography, brand mark.">
+        <DCArtboard id="sys-sources"    label="Sources page"      width={1024} height={1016}><SourcesPage/></DCArtboard>
+        <DCArtboard id="sys-states"     label="Component states"  width={1144} height={1196}><ComponentStates/></DCArtboard>
+        <DCArtboard id="sys-icons"      label="Iconography"       width={1144} height={776}><IconographyPage/></DCArtboard>
+        <DCArtboard id="sys-marks"      label="Logo system"       width={1144} height={1196}><BrandMarks/></DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="light" title="Light mode" subtitle="Homepage and calculator rendered on the paper palette. Optional, never default.">
+        <DCArtboard id="lt-home" label="Light · homepage" width={1344} height={856}><LightHomepage/></DCArtboard>
+        <DCArtboard id="lt-calc" label="Light · calc"     width={1344} height={816}><LightCalculator/></DCArtboard>
+      </DCSection>
+
+      {/* ─────────────────────────────────────────────────── */}
+      <DCSection id="r3-brand" title="Round 3 · BMW full brand page" subtitle="Hero · captive lender · 18-mo history · negotiation profile · benchmarks · F&amp;I · community · archive.">
+        <DCArtboard id="r3-bmw" label="BMW · full scroll" width={1328} height={3472}><BMWFullBrand/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="r3-thread" title="Round 3 · Mobile thread detail" subtitle="Full forum thread at 375px — title, OP, three replies, sticky composer.">
+        <DCArtboard id="r3-thread-art" label="Thread · 375px" width={423} height={1116}><MobThread/></DCArtboard>
+      </DCSection>
+
+      <DCSection id="qa" title="Open questions · design responses" subtitle="Where the work pushed back on the brief, and how we'd resolve it.">
+        <DCArtboard id="qa-responses" label="Six responses" width={1024} height={1176}><R2Responses/></DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
