@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# run_local.sh — bring up the local development environment.
+# run_local.sh — bootstrap the local LeaseWise dev environment.
 #
-# Steps:
-#   1. Ensure .env exists
-#   2. Start Postgres + apply schema if not yet applied
-#   3. Start frontend and backend via docker compose
-#   4. Tail logs
+# Bootstrap-only. Verifies prerequisites, applies the schema if not yet
+# applied, seeds reference data, and prints the two commands you run in two
+# terminals to actually work. Does NOT background long-lived processes —
+# that's the daily two-terminal workflow per CLAUDE.md.
+#
+# Prereqs (host installs, no Docker):
+#   - PostgreSQL 14+ with PostGIS (apt or brew)
+#   - Python 3.12+ via uv
+#   - Node 20+
 #
 # Usage: ./scripts/run_local.sh
 
@@ -13,49 +17,71 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# ── 1. Verify env file ──────────────────────────────────────────────────────
+# ── 1. .env present ─────────────────────────────────────────────────────────
 if [[ ! -f .env ]]; then
-    echo "× .env not found. Copy .env.example → .env and set ANTHROPIC_API_KEY."
+    echo "x .env not found. Copy .env.example to .env and set ANTHROPIC_API_KEY." >&2
     exit 1
 fi
 
-# ── 2. Start Postgres ───────────────────────────────────────────────────────
-echo "→ Starting Postgres..."
-docker compose up -d postgres
+set -a
+# shellcheck source=/dev/null
+source .env
+set +a
 
-# Wait for Postgres healthcheck
-echo "→ Waiting for Postgres to be ready..."
-for _ in $(seq 1 30); do
-    if docker compose exec -T postgres pg_isready -U leasewise -d leasewise >/dev/null 2>&1; then
-        break
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+POSTGRES_DB="${POSTGRES_DB:-leasewise}"
+POSTGRES_USER="${POSTGRES_USER:-leasewise}"
+export PGPASSWORD="${POSTGRES_PASSWORD:-}"
+
+# ── 2. Tools present ────────────────────────────────────────────────────────
+for tool in psql uv node; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+        echo "x $tool not found on PATH. See CLAUDE.md 'Local development setup'." >&2
+        exit 1
     fi
-    sleep 1
 done
 
-# ── 3. Apply schema if not yet applied ──────────────────────────────────────
-SCHEMA_APPLIED=$(docker compose exec -T postgres \
-    psql -U leasewise -d leasewise -tAc \
-    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'provinces')")
-
-if [[ "$SCHEMA_APPLIED" == "f" ]]; then
-    echo "→ Schema not yet applied. Applying..."
-    ./scripts/apply_schema.sh
-    echo "→ Seeding reference data..."
-    docker compose run --rm backend uv run python scripts/seed_reference_data.py
-else
-    echo "→ Schema already applied. Skipping."
+# ── 3. Postgres reachable ───────────────────────────────────────────────────
+echo "-> Checking Postgres at ${POSTGRES_HOST}:${POSTGRES_PORT}..."
+if ! pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" >/dev/null 2>&1; then
+    echo "x Postgres not reachable at ${POSTGRES_HOST}:${POSTGRES_PORT}." >&2
+    echo "  Start your local Postgres (e.g. 'sudo systemctl start postgresql')." >&2
+    exit 1
 fi
 
-# ── 4. Start everything else ────────────────────────────────────────────────
-echo "→ Starting backend and frontend..."
-docker compose up -d backend frontend
+# ── 4. Apply schema if not yet applied (idempotent) ─────────────────────────
+SCHEMA_APPLIED=$(psql -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -tAc "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'provinces')" \
+    2>/dev/null || echo "f")
 
-# ── 5. Tail logs ────────────────────────────────────────────────────────────
-echo ""
-echo "✓ LeaseWise running:"
-echo "    Frontend: http://localhost:3000"
-echo "    Backend:  http://localhost:8000  (docs at /docs)"
-echo "    Postgres: localhost:5432  (user/pass: leasewise/leasewise_dev)"
-echo ""
-echo "→ Tailing logs (Ctrl+C to detach, services keep running)..."
-docker compose logs -f backend frontend
+if [[ "$SCHEMA_APPLIED" == "t" ]]; then
+    echo "-> Schema already applied. Skipping."
+else
+    echo "-> Applying schema..."
+    ./scripts/apply_schema.sh
+    echo "-> Seeding reference data..."
+    (cd backend && source .venv/bin/activate && python ../scripts/seed_reference_data.py)
+fi
+
+# ── 5. Print the two-terminal instructions ──────────────────────────────────
+cat <<'EOF'
+
+OK Bootstrap complete.
+
+Now open two terminals:
+
+  Terminal 1 (backend):
+    cd backend
+    source .venv/bin/activate
+    uv run uvicorn app.main:app --reload --port 8000
+    -> http://localhost:8000   (docs at /docs)
+
+  Terminal 2 (frontend):
+    cd frontend
+    npm run dev
+    -> http://localhost:3000
+
+Postgres: ${POSTGRES_HOST}:${POSTGRES_PORT}  (db: ${POSTGRES_DB}, user: ${POSTGRES_USER})
+
+EOF
