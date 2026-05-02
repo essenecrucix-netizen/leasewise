@@ -26,15 +26,27 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 def get_engine() -> AsyncEngine:
-    """Return the process-wide async engine, creating it on first use."""
+    """Return the process-wide async engine, creating it on first use.
+
+    Azure Database for PostgreSQL Flexible Server requires SSL (TLS).
+    asyncpg negotiates automatically when the server demands it, but
+    we make the requirement explicit here via connect_args so the
+    behaviour is visible in code reviews instead of "works by accident."
+    For a local apt-installed Postgres without TLS, set
+    POSTGRES_SSL=false in .env.
+    """
     global _engine
     if _engine is None:
+        connect_args: dict[str, object] = {}
+        if settings.postgres_ssl:
+            connect_args["ssl"] = "require"
         _engine = create_async_engine(
             settings.database_url,
             pool_size=10,
             max_overflow=5,
             pool_pre_ping=True,
             future=True,
+            connect_args=connect_args,
         )
     return _engine
 

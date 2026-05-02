@@ -42,11 +42,17 @@ class Settings(BaseSettings):
     postgres_db:       str = "leasewise"
     postgres_user:     str = "leasewise"
     postgres_password: str = ""
+    # Azure Database for PostgreSQL Flexible Server requires SSL. The
+    # default-True keeps prod safe; set POSTGRES_SSL=false in .env for a
+    # local apt-installed Postgres without TLS.
+    postgres_ssl:      bool = True
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Async SQLAlchemy URL for asyncpg driver."""
+        """Async SQLAlchemy URL for asyncpg driver. The `ssl=` query
+        parameter is consumed by asyncpg via SQLAlchemy's connect_args
+        path — see app/db/session.py."""
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

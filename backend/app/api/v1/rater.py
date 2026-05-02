@@ -6,24 +6,33 @@ manual-input form, runs Claude-Haiku extraction (or the regex fallback
 in dev when ANTHROPIC_API_KEY is unset), and returns a graded result
 including markup analysis and 3+ feedback callouts.
 
-Phase 1.3 always returns confidence_band="insufficient_data" because the
-market_deals table is empty until ingestion lands in Phase 1.4. The
-frontend renders that as the "Confidence (low data)" result state.
+Phase 1.4: switched from in-memory `captive_baseline.py` to the
+DB-backed `grade_with_db()` path. The endpoint queries `oem_programs`
+for captive baselines and counts matching `market_deals` rows for the
+percentile / sample_size fields. captive_baseline.py is the fallback
+when the DB has no matching row, so the rater keeps working before the
+seed script has populated oem_programs (or for any vehicle the seed
+doesn't cover).
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ValidationError
+from app.db.session import get_session
 from app.schemas.rater import RaterRequest, RaterResponse
 from app.services import extraction_service
-from app.services.rater_service import grade, grade_from_structured
+from app.services.rater_service import grade_with_db, structured_to_extracted
 
 
 router = APIRouter()
 
 
 @router.post("/score", response_model=RaterResponse)
-async def score_worksheet(req: RaterRequest) -> RaterResponse:
+async def score_worksheet(
+    req: RaterRequest,
+    session: AsyncSession = Depends(get_session),
+) -> RaterResponse:
     """
     Score a dealer worksheet.
 
@@ -43,12 +52,9 @@ async def score_worksheet(req: RaterRequest) -> RaterResponse:
             "Provide only one input mode at a time — worksheet_text or structured.",
         )
 
-    # Phase 1.3: ingestion hasn't started, so there are no comparables.
-    # Wire this to a real `market_deals` count query once Phase 1.4 lands.
-    market_deals_count = 0
-
     if req.structured is not None:
-        return grade_from_structured(req.structured, market_deals_count=market_deals_count)
+        extracted = structured_to_extracted(req.structured)
+    else:
+        extracted = await extraction_service.extract(req.worksheet_text or "")
 
-    extracted = await extraction_service.extract(req.worksheet_text or "")
-    return grade(extracted, market_deals_count=market_deals_count)
+    return await grade_with_db(session, extracted)

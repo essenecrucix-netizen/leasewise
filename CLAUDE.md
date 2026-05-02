@@ -128,6 +128,25 @@ leasewise/
 - Tenant scoping: `tenant_id VARCHAR(50)` first column on user-scoped tables; every query filters by `tenant_id` (enforced via `app/db/session.py`).
 - Generated columns persist `days_on_lot`, `discount_percent`, `payment_to_msrp_ratio`. Don't recompute; query the column.
 
+### Azure Postgres specifics (production DB)
+
+The production DB is Azure Database for PostgreSQL Flexible Server, sharing
+the existing Workgraph instance with a separate `leasewise` database. Two
+quirks worth knowing:
+
+- **`CREATE EXTENSION` is admin-only on Azure managed Postgres.** The
+  application user (`leasewise`) does not have permission to run
+  `CREATE EXTENSION postgis` etc. Extensions are installed via the
+  Azure portal's `azure.extensions` parameter, then created in the
+  target DB by the admin (one-time). When applying `lease_platform_schema.sql`
+  to Azure, lines 31–33 (the three `CREATE EXTENSION` statements) are
+  commented out — the extensions are pre-provisioned. Local dev with apt /
+  brew Postgres can run them as-is; the lines are only commented when
+  applying against Azure.
+- **SSL is required.** Set `POSTGRES_SSL=true` in production `.env`.
+  `app/db/session.py` passes `ssl="require"` to `connect_args`. Set
+  `POSTGRES_SSL=false` for a local apt / brew Postgres without TLS.
+
 ---
 
 ## Critical rules — always do these
