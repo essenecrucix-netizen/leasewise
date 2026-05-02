@@ -4,7 +4,7 @@ Deal rater grading and feedback.
 Given ExtractedFields (from `extraction_service.extract` or a structured
 form submission), produce a RaterResponse:
 
-  1. Look up the captive baseline program for the vehicle.
+  1. Resolve the captive baseline program for the vehicle.
   2. Compute markup (in MF terms; surface as APR + bps).
   3. Compute residual delta (worksheet vs published).
   4. Compute effective discount % (against MSRP+freight).
@@ -12,21 +12,37 @@ form submission), produce a RaterResponse:
   6. Generate at least three feedback callouts.
   7. Set confidence_band based on `market_deals` comparable count.
 
-Phase 1.3: `market_deals` is empty so `sample_size=0` and
-`confidence_band="insufficient_data"`. The signal-based letter grade
-still ships; the frontend renders the "Confidence (low data)" treatment
-because confidence_band guards the percentile-grounded display.
+Two grading entry points:
+
+- `grade(extracted)` — sync, uses the in-memory `captive_baseline.py`
+  fallback. No I/O. Used by structured-form submissions, tests, and as
+  a deterministic fallback when DB lookup fails.
+
+- `grade_with_db(session, extracted)` — async. Queries `oem_programs`
+  first (post-Phase-1.4 production codepath), falls back to
+  `captive_baseline.py` when the table has no matching row, and counts
+  matching `market_deals` for the percentile path.
+
+Phase 1.4 doesn't yet populate market_deals enough for real percentile
+scoring; the rater stays in `confidence_band="insufficient_data"` until
+the LeaseHackr crawler has ingested ≥30 matching Canadian deals.
 
 Internals are MF-centric — that's the program-data key. User-facing
 output (in feedback bodies) leads with APR + bps. Per the locked Phase
-1.3 contract.
+1.3 / 1.4 contract.
 """
 
 from __future__ import annotations
 
 from decimal import Decimal
 
+import structlog
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.lease_math.conversion import apr_to_mf, mf_to_apr
+from app.models.deal import MarketDeal
+from app.models.program import OemProgram
 from app.schemas.rater import (
     ConfidenceBand,
     ExtractedFields,
@@ -36,32 +52,147 @@ from app.schemas.rater import (
     RaterResponse,
     StructuredInput,
 )
-from app.services.captive_baseline import CaptiveProgram, lookup as lookup_captive
+from app.services.captive_baseline import CaptiveProgram, lookup as lookup_captive_baseline
 
 
-# Threshold below which percentile scoring is unreliable. Phase 1.3
-# never reaches this; ingestion in Phase 1.4+ starts populating
-# market_deals, at which point the rater will run real percentile math.
+_log = structlog.get_logger()
+
+
+# Threshold below which percentile scoring is unreliable. Phase 1.3 / 1.4
+# don't reach this; sustained LeaseHackr ingestion will eventually feed
+# enough Canadian deals through to clear it.
 MIN_COMPARABLES_FOR_PERCENTILE: int = 30
 
 
-# ── Public entry point ──────────────────────────────────────────────────
+# ── Public entry points ─────────────────────────────────────────────────
 
 def grade(extracted: ExtractedFields, *, market_deals_count: int = 0) -> RaterResponse:
-    """
-    Score an extracted worksheet. Pure function; no I/O.
-
-    `market_deals_count` is the number of comparable closed deals
-    (same trim/term/province/last 90 days). In Phase 1.3 this is
-    always 0 because ingestion hasn't started.
-    """
-    notes: list[str] = []
-    feedback: list[FeedbackItem] = []
-    captive: CaptiveProgram | None = lookup_captive(
+    """Sync, deterministic rater. Uses the in-memory captive_baseline.py
+    fallback. No I/O. Called by tests and the structured-form path."""
+    captive = lookup_captive_baseline(
         make=extracted.make,
         model=extracted.model,
         term_months=extracted.term_months,
     )
+    return _score(extracted, captive, market_deals_count)
+
+
+def grade_from_structured(
+    structured: StructuredInput, *, market_deals_count: int = 0
+) -> RaterResponse:
+    """Convenience: run the sync rater against a structured form."""
+    extracted = structured_to_extracted(structured)
+    return grade(extracted, market_deals_count=market_deals_count)
+
+
+async def grade_with_db(
+    session: AsyncSession, extracted: ExtractedFields
+) -> RaterResponse:
+    """Async grading path used by the rater endpoint in production.
+
+    Queries `oem_programs` first; falls back to `captive_baseline.py`
+    when no matching row exists (e.g., a make/model the seed didn't
+    cover, or before `seed_oem_programs.py` has run). Also counts
+    matching `market_deals` rows for the percentile / sample_size
+    fields.
+    """
+    captive = await _resolve_captive_from_db(session, extracted)
+    if captive is None:
+        captive = lookup_captive_baseline(
+            make=extracted.make,
+            model=extracted.model,
+            term_months=extracted.term_months,
+        )
+        if captive is not None:
+            _log.info(
+                "rater.captive_baseline_fallback",
+                make=extracted.make,
+                model=extracted.model,
+                term=extracted.term_months,
+            )
+
+    market_deals_count = await _count_market_deals(session, extracted)
+    return _score(extracted, captive, market_deals_count)
+
+
+# ── DB lookups ──────────────────────────────────────────────────────────
+
+async def _resolve_captive_from_db(
+    session: AsyncSession, extracted: ExtractedFields
+) -> CaptiveProgram | None:
+    """
+    Find the current captive program in oem_programs for the extracted
+    vehicle. Returns a CaptiveProgram (the same shape captive_baseline
+    uses) so the downstream grading code doesn't care about the source.
+    """
+    if not extracted.make or not extracted.model or not extracted.term_months:
+        return None
+
+    make_norm = _normalize(extracted.make)
+    model_norm = _normalize(extracted.model)
+
+    # Forgiving on model: substring match either direction (so "X3" finds
+    # "x3" and "CR-V Hybrid Touring" finds "cr-v hybrid").
+    stmt = (
+        select(OemProgram)
+        .where(OemProgram.is_current.is_(True))
+        .where(OemProgram.term_months == extracted.term_months)
+        .where(func.lower(OemProgram.make_name) == make_norm)
+        .order_by(OemProgram.captured_at.desc())
+        .limit(20)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    for r in rows:
+        rm = _normalize(r.model_name or "")
+        if rm and (model_norm.startswith(rm) or rm.startswith(model_norm)):
+            return CaptiveProgram(
+                make_normalized=make_norm,
+                model_normalized=rm,
+                term_months=r.term_months,
+                apr_percent=r.lease_rate_percent * Decimal("100"),
+                money_factor=r.lease_rate_percent / Decimal("24"),  # *100/2400 = /24
+                residual_pct=r.residual_percent or Decimal("0"),
+                annual_km=r.km_allowance_annual,
+            )
+    return None
+
+
+async def _count_market_deals(
+    session: AsyncSession, extracted: ExtractedFields
+) -> int:
+    """Count matching closed deals for percentile sample sizing.
+
+    Match on make + model + term_months (loose). The 90-day window and
+    province filter come in once we have enough volume to be choosy
+    about comparables — for Phase 1.4, just count any matching deal.
+    """
+    if not extracted.make or not extracted.model:
+        return 0
+    make_norm = _normalize(extracted.make)
+    model_norm = _normalize(extracted.model)
+
+    stmt = select(func.count(MarketDeal.deal_id)).where(
+        func.lower(MarketDeal.make_name) == make_norm,
+        func.lower(MarketDeal.model_name).like(f"%{model_norm}%"),
+    )
+    if extracted.term_months:
+        stmt = stmt.where(MarketDeal.term_months == extracted.term_months)
+    return int((await session.execute(stmt)).scalar() or 0)
+
+
+def _normalize(s: str) -> str:
+    return s.strip().lower()
+
+
+# ── Core scoring (shared by sync + async paths) ─────────────────────────
+
+def _score(
+    extracted: ExtractedFields,
+    captive: CaptiveProgram | None,
+    market_deals_count: int,
+) -> RaterResponse:
+    notes: list[str] = []
+    feedback: list[FeedbackItem] = []
 
     markup = _build_markup(extracted, captive) if captive else None
     feedback.extend(_rate_feedback(extracted, captive, markup))
@@ -103,19 +234,13 @@ def grade(extracted: ExtractedFields, *, market_deals_count: int = 0) -> RaterRe
     return RaterResponse(
         extracted=extracted,
         grade=letter,
-        percentile=None,                # always null until ingestion lands
+        percentile=None,                # real percentile rank lands when sample_size is meaningful
         sample_size=market_deals_count,
         confidence_band=confidence_band,
         markup=markup,
         feedback=feedback,
         notes=notes,
     )
-
-
-def grade_from_structured(structured: StructuredInput, *, market_deals_count: int = 0) -> RaterResponse:
-    """Convenience: run the rater against a manually-typed structured form."""
-    extracted = _structured_to_extracted(structured)
-    return grade(extracted, market_deals_count=market_deals_count)
 
 
 # ── Markup ──────────────────────────────────────────────────────────────
@@ -448,7 +573,7 @@ def _derive_grade(
 
 # ── StructuredInput → ExtractedFields ───────────────────────────────────
 
-def _structured_to_extracted(s: StructuredInput) -> ExtractedFields:
+def structured_to_extracted(s: StructuredInput) -> ExtractedFields:
     """Convert manual structured-form input into the same ExtractedFields
     shape the rest of the pipeline consumes."""
     apr_dec: Decimal | None = None

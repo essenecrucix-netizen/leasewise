@@ -24,6 +24,7 @@ from app.api.v1 import (
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.ingestion.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
@@ -38,6 +39,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             "MOCK_AUTH cannot be true in production. Aborting startup."
         )
 
+    # In-process APScheduler. LeaseHackr nightly crawl + weekly synthesis.
+    # Disabled inside TestClient runs via LEASEWISE_DISABLE_SCHEDULER=true.
+    start_scheduler()
+
     log.info(
         "leasewise.startup",
         environment=settings.environment,
@@ -46,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    await stop_scheduler()
     log.info("leasewise.shutdown")
 
 
