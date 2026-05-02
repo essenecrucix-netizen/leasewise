@@ -1,0 +1,220 @@
+/* Polished grade card (.dr) — ported from docs/design-phase/rater.css.
+   One CSS module covers all 7 result-state variants; tone is applied
+   via additional class names (gradeA / gradeBad / lowData / etc.). */
+
+.dr {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
+}
+.emptyMark {
+  font-family: var(--font-display);
+  font-size: 96px;
+  line-height: 1;
+  color: var(--border-strong);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+.emptyHint {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-top: 16px;
+  max-width: 32ch;
+}
+.emptyAccent { color: var(--lime); }
+
+/* Top — letter + headline */
+.top {
+  display: flex;
+  gap: var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.gradeLetter {
+  font-family: var(--font-display);
+  font-size: clamp(96px, 14vw, 144px);
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+}
+.gradeA          { color: var(--lime); }
+.gradeB          { color: var(--emerald); }
+.gradeC          { color: var(--steel); }
+.gradeD          { color: var(--amber); }
+.gradeF          { color: var(--blood-orange); }
+.gradeQuestion   { color: var(--border-strong); }
+
+.head {
+  flex: 1;
+  min-width: 240px;
+}
+.head h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+.headMeta {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.headPercentile {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* Confidence (low data) inline badge */
+.lowDataBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(186, 117, 23, 0.12);
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-top: 6px;
+}
+.lowDataBadge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+/* Markup row */
+.markup {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+.markupCell { display: flex; flex-direction: column; gap: 4px; }
+.markupLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.markupValue {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.markupValueBad { color: var(--blood-orange); }
+.markupBpsLine {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Feedback list */
+.feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fbItem {
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  border-left: 3px solid var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+}
+.fbItem strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+.fbItemGood { border-left-color: var(--emerald); }
+.fbItemWarn { border-left-color: var(--amber); }
+.fbItemBad  { border-left-color: var(--blood-orange); }
+
+/* Sample n line */
+.sample {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Loading skeleton */
+.skel {
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface-inset) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s linear infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skelGrade  { width: 144px; height: 144px; flex-shrink: 0; }
+.skelTitle  { height: 22px; width: 60%; }
+.skelLine   { height: 13px; width: 100%; }
+.skelLine2  { height: 13px; width: 75%; }
+.skelLine3  { height: 13px; width: 50%; }
+
+/* Error variant */
+.errorFlag {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: rgba(232, 89, 60, 0.08);
+  border-left: 3px solid var(--blood-orange);
+  color: var(--text-secondary);
+}
+.errorFlag strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--blood-orange);
+}
+
+/* Notes (caveats, parser confidence) — small footer line */
+.notes {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-soft);
+}
+.notes ul { margin: 0; padding-left: 16px; }
+.notes li { margin-bottom: 2px; }
