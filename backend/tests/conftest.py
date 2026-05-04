@@ -10,9 +10,13 @@ Empty-DB behavior is identical to Phase 1.3:
   - `_resolve_captive_from_db()` returns None → falls back to captive_baseline.py
   - `_count_market_deals()` returns 0 → confidence_band stays insufficient_data
 
-Also disables the in-process APScheduler (LeaseHackr crawl + synthesis)
-during tests via LEASEWISE_DISABLE_SCHEDULER=true. Production codepath
-is unaffected — the override only activates inside TestClient calls.
+Phase 1.4a defect-fix #2: the in-process APScheduler is now
+default-disabled (unset env var → disabled). The conftest no longer
+needs to set LEASEWISE_DISABLE_SCHEDULER explicitly, but we leave the
+explicit `=true` here as belt-and-suspenders so a misconfigured CI
+runner with the var set to "false" still doesn't fire the scheduler.
+Production codepath is unaffected — the override only applies inside
+TestClient calls.
 """
 
 from __future__ import annotations
@@ -23,8 +27,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Set BEFORE app/main imports — its lifespan reads this on startup.
-os.environ.setdefault("LEASEWISE_DISABLE_SCHEDULER", "true")
+# Belt-and-suspenders against a CI runner that might inherit
+# LEASEWISE_DISABLE_SCHEDULER=false from an outer env. Default is
+# already disabled per app/ingestion/scheduler.py.
+os.environ["LEASEWISE_DISABLE_SCHEDULER"] = "true"
 
 from app.db.session import get_session  # noqa: E402
 from app.main import app  # noqa: E402

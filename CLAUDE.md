@@ -317,12 +317,40 @@ cd frontend && npm test
 
 ### Migrations
 
+Alembic is configured (`backend/alembic.ini` + `backend/alembic/`).
+The runner uses the same async asyncpg engine as the app — no separate
+psycopg2 dependency. Versions live under `backend/alembic/versions/`
+with a `YYYY_MM_DD_HHMM-revid_slug.py` filename pattern so they sort
+chronologically.
+
 ```bash
 cd backend
 uv run alembic revision --autogenerate -m "describe change"
 # review the generated SQL
 uv run alembic upgrade head
 ```
+
+### Ingestion scheduler (Phase 1.4a)
+
+The in-process APScheduler that runs the LeaseHackr nightly crawl + weekly
+synthesis is **default-disabled**. Production opts in by setting
+`LEASEWISE_DISABLE_SCHEDULER=false` in the systemd unit's
+`EnvironmentFile=.env`. Dev sessions stay opted out automatically
+(unset variable → disabled), so a uvicorn started for unrelated
+testing won't fire 03:00 crawls behind your back.
+
+Truth table:
+
+| `LEASEWISE_DISABLE_SCHEDULER` | scheduler |
+|---|---|
+| unset | disabled |
+| `true` / `1` | disabled |
+| `false` / `0` | **enabled** (production opts in here) |
+| anything else | disabled (fail-safe) |
+
+Manual one-shot invocations remain available regardless of the flag:
+`python -m app.ingestion.leasehackr.crawl --once` and
+`python -m app.ingestion.leasehackr.synthesize --once`.
 
 ### Mock auth
 

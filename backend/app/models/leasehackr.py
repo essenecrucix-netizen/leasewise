@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, String
+from sqlalchemy import BigInteger, Boolean, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, TEXT, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,9 +28,14 @@ class LhCrawlLog(Base):
     category:    Mapped[str]      = mapped_column(String(100), nullable=False)
     outcome:     Mapped[str]      = mapped_column(String(50),  nullable=False)
     """One of:
+       in_progress
        deal_stored | knowledge_stored
        not_a_deal | no_knowledge | non_canadian
        skipped_pinned | skipped_short | fetch_failed | db_error"""
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Populated for failure outcomes (db_error, fetch_failed,
+       extraction errors). NULL for happy-path outcomes. Added in
+       Alembic revision 0001."""
     crawled_at:  Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 
 
