@@ -28,9 +28,9 @@
 -- 1. EXTENSIONS
 -- ============================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "postgis";           -- dealer geo queries
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";           -- fuzzy text search on makes/models
+-- CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- CREATE EXTENSION IF NOT EXISTS "postgis";           -- dealer geo queries
+-- CREATE EXTENSION IF NOT EXISTS "pg_trgm";           -- fuzzy text search on makes/models
 
 
 -- ============================================================

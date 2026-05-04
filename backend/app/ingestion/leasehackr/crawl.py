@@ -6,21 +6,39 @@ Ask the Hackrs, Wiki), extracts structured facts via Claude Haiku, and
 writes:
   - deal posts → market_deals (Canadian only; non-Canadian skipped + logged)
   - knowledge posts → lh_knowledge_chunks
-  - every topic touched → lh_crawl_log (idempotency)
+  - every topic touched → lh_crawl_log (idempotency + observability)
 
-Design promises (per CLAUDE.md "never" rule #4 + lh_function_app.py):
+Design promises (CLAUDE.md "never" rule #4 + lh_function_app.py):
   - Original post text is NEVER stored. Only structured extracted facts.
   - Idempotent: a topic_id present in lh_crawl_log is never re-processed.
   - Polite: CRAWL_DELAY_SEC seconds between every Discourse request.
   - Cost-aware: Haiku for per-post extraction; weekly Sonnet synthesis
     happens in synthesize.py.
 
-Manual one-shot invocation (for verification or backfill):
+Phase 1.4a defect-fix structure (revised after the May 3-4 silent-fail
+incident):
+
+  1. The outer loop body for each topic always writes an 'in_progress'
+     row in lh_crawl_log BEFORE doing any API / DB work. If the loop
+     is killed mid-topic, that row stays in_progress and is visible
+     on the next manual inspection.
+  2. Each `_process_*` function returns `(outcome, error_message)` —
+     it does NOT call _log_outcome itself. This collapses the failure
+     surface to a single place.
+  3. The final outcome is upserted via `_record_outcome_safely` —
+     never raises. If both the original write and the rollback-retry
+     write fail, the failure is logged via structlog but the topic
+     loop continues. Worst case the row stays in_progress and is
+     diagnosable post-hoc.
+
+Manual one-shot:
     cd backend && source .venv/bin/activate
     python -m app.ingestion.leasehackr.crawl --once
 
 Scheduled invocation: APScheduler in app/main.py lifespan triggers
-`run_crawl_once()` nightly at 03:00.
+`run_crawl_once()` nightly at 03:00. Production opts in by setting
+LEASEWISE_DISABLE_SCHEDULER=false in the systemd EnvironmentFile;
+dev defaults to disabled.
 """
 
 from __future__ import annotations
@@ -44,6 +62,7 @@ from app.services.ai import claude_client, prompts
 from app.ingestion.leasehackr.discourse import (
     CATEGORIES,
     CRAWL_DELAY_SEC,
+    MAX_TOPICS_PER_CAT,
     MAX_TOPICS_PER_RUN,
     Category,
     DiscourseClient,
@@ -55,7 +74,8 @@ _log = structlog.get_logger()
 
 
 # Outcomes recorded in lh_crawl_log.outcome — must match the values
-# enumerated in lh_schema_additions.sql.
+# enumerated in lh_schema_additions.sql (extended in Phase 1.4a).
+OUTCOME_IN_PROGRESS       = "in_progress"
 OUTCOME_DEAL_STORED       = "deal_stored"
 OUTCOME_KNOWLEDGE_STORED  = "knowledge_stored"
 OUTCOME_NOT_A_DEAL        = "not_a_deal"
@@ -64,6 +84,7 @@ OUTCOME_NON_CANADIAN      = "non_canadian"
 OUTCOME_SKIPPED_PINNED    = "skipped_pinned"
 OUTCOME_SKIPPED_SHORT     = "skipped_short"
 OUTCOME_FETCH_FAILED      = "fetch_failed"
+OUTCOME_EXTRACTION_FAILED = "extraction_failed"
 OUTCOME_DB_ERROR          = "db_error"
 
 
@@ -109,8 +130,16 @@ async def _crawl_category(
     crawled_ids: set[int],
     counters:    dict[str, int],
 ) -> None:
+    """Process one Discourse category, capped at MAX_TOPICS_PER_CAT
+    new topics. The global cap MAX_TOPICS_PER_RUN still applies but
+    with the per-category cap, US-heavy categories can't starve the
+    others of budget."""
     page = 0
-    while counters["topics_processed"] < MAX_TOPICS_PER_RUN:
+    cat_processed = 0      # new topics processed in this category
+    while (
+        counters["topics_processed"] < MAX_TOPICS_PER_RUN
+        and cat_processed < MAX_TOPICS_PER_CAT
+    ):
         topic_list = await lh.get_topic_list(cat.id, page)
         topics = topic_list.get("topic_list", {}).get("topics", [])
         if not topics:
@@ -122,15 +151,30 @@ async def _crawl_category(
             break
 
         for topic in new_topics:
-            if counters["topics_processed"] >= MAX_TOPICS_PER_RUN:
+            if (
+                counters["topics_processed"] >= MAX_TOPICS_PER_RUN
+                or cat_processed >= MAX_TOPICS_PER_CAT
+            ):
                 break
-            await _process_topic(session, lh, cat, topic, crawled_ids, counters)
+            before = counters["topics_processed"]
+            await _handle_topic(session, lh, cat, topic, crawled_ids, counters)
+            # _handle_topic increments topics_processed only after the
+            # post-text gate; track at the same granularity here.
+            if counters["topics_processed"] > before:
+                cat_processed += 1
 
         page += 1
         await asyncio.sleep(CRAWL_DELAY_SEC)
 
+    _log.info(
+        "leasehackr.category_complete",
+        category=cat.slug,
+        cat_processed=cat_processed,
+        global_processed=counters["topics_processed"],
+    )
 
-async def _process_topic(
+
+async def _handle_topic(
     session:     AsyncSession,
     lh:          DiscourseClient,
     cat:         Category,
@@ -138,49 +182,120 @@ async def _process_topic(
     crawled_ids: set[int],
     counters:    dict[str, int],
 ) -> None:
+    """
+    Handle one topic. Always emits an outcome row (or upgrades the
+    in_progress row to a final outcome). Never raises — failures are
+    captured as outcomes.
+    """
     topic_id: int = topic["id"]
 
-    # Skip pinned admin/meta topics with very few replies — usually
-    # category housekeeping, not lease content.
+    # 1. Pre-write 'in_progress'. If we crash before completing, the row
+    #    stays in_progress and is visible on the next manual inspection.
+    await _record_outcome_safely(
+        session, topic_id, cat.slug, OUTCOME_IN_PROGRESS,
+        error_message=None,
+    )
+
+    # 2. Pinned admin/meta topics (very few replies) — record + return.
     if topic.get("pinned") and topic.get("posts_count", 0) < 3:
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_SKIPPED_PINNED)
+        await _record_outcome_safely(session, topic_id, cat.slug, OUTCOME_SKIPPED_PINNED, None)
         crawled_ids.add(topic_id)
         counters["skipped"] += 1
         return
 
+    # 3. Polite delay, then fetch the topic body.
     await asyncio.sleep(CRAWL_DELAY_SEC)
-    topic_data = await lh.get_topic(topic_id)
+
+    try:
+        topic_data = await lh.get_topic(topic_id)
+    except Exception as e:  # noqa: BLE001
+        await _record_outcome_safely(
+            session, topic_id, cat.slug, OUTCOME_FETCH_FAILED, _trim(str(e)),
+        )
+        crawled_ids.add(topic_id)
+        counters["skipped"] += 1
+        return
+
     if not topic_data:
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_FETCH_FAILED)
+        await _record_outcome_safely(
+            session, topic_id, cat.slug, OUTCOME_FETCH_FAILED,
+            "Discourse returned empty body",
+        )
         crawled_ids.add(topic_id)
         counters["skipped"] += 1
         return
 
     post_text = first_post_text(topic_data)
     if len(post_text) < 50:
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_SKIPPED_SHORT)
+        await _record_outcome_safely(session, topic_id, cat.slug, OUTCOME_SKIPPED_SHORT, None)
         crawled_ids.add(topic_id)
         counters["skipped"] += 1
         return
 
     counters["topics_processed"] += 1
 
+    # 4. Knowledge extraction runs on EVERY topic regardless of category
+    #    or Canadian classification, per the architecture doc — that's
+    #    where broader lease intelligence (program details, captive
+    #    behavior, F&I tactics) lives. Errors are recorded but don't
+    #    block the deal-extraction step that follows for Signed Deals.
+    knowledge_outcome, knowledge_err = await _try_extract_knowledge(
+        session, topic, post_text,
+    )
+
+    # 5. Deal extraction runs only on Signed Deals topics. Knowledge
+    #    extraction has already run above; the deal step decides the
+    #    primary outcome label for the lh_crawl_log row.
     if cat.mode == "deals":
-        await _process_deal(session, cat, topic, post_text, crawled_ids, counters)
+        deal_outcome, deal_err = await _process_deal(session, topic, post_text)
+        if deal_outcome == OUTCOME_DEAL_STORED:
+            counters["deals_stored"] += 1
+        else:
+            counters["skipped"] += 1
+        primary_outcome = deal_outcome
+        primary_err     = deal_err
     else:
-        await _process_knowledge(session, cat, topic, post_text, crawled_ids, counters)
+        # mode == "knowledge" — the knowledge extraction above IS the
+        # primary work; reuse its outcome.
+        if knowledge_outcome == OUTCOME_KNOWLEDGE_STORED:
+            counters["knowledge_stored"] += 1
+        else:
+            counters["skipped"] += 1
+        primary_outcome = knowledge_outcome
+        primary_err     = knowledge_err
+
+    await _record_outcome_safely(session, topic_id, cat.slug, primary_outcome, primary_err)
+    crawled_ids.add(topic_id)
+
+
+# ── Knowledge extraction (runs on every topic) ──────────────────────────
+
+async def _try_extract_knowledge(
+    session:   AsyncSession,
+    topic:     dict[str, Any],
+    post_text: str,
+) -> tuple[str, str | None]:
+    """
+    Always attempts knowledge extraction. Persists chunks for posts
+    that have useful knowledge. Returns the outcome the caller should
+    record — but for Signed Deals topics the caller overwrites with
+    the deal outcome since deals are the primary signal for that
+    category.
+
+    Knowledge chunks always include `applies_to_canada` (true/false/null)
+    so a downstream Canadian-only filter can be applied at query time.
+    """
+    return await _process_knowledge(session, topic, post_text)
 
 
 # ── Deal post processing ────────────────────────────────────────────────
 
 async def _process_deal(
-    session:     AsyncSession,
-    cat:         Category,
-    topic:       dict[str, Any],
-    post_text:   str,
-    crawled_ids: set[int],
-    counters:    dict[str, int],
-) -> None:
+    session:   AsyncSession,
+    topic:     dict[str, Any],
+    post_text: str,
+) -> tuple[str, str | None]:
+    """Returns (outcome, error_message). Never raises."""
     topic_id = topic["id"]
     try:
         facts = await claude_client.extract_json(
@@ -189,46 +304,33 @@ async def _process_deal(
         )
     except ExternalServiceError as e:
         _log.warning("leasehackr.deal_extract_failed", topic_id=topic_id, error=str(e))
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_FETCH_FAILED)
-        crawled_ids.add(topic_id)
-        counters["skipped"] += 1
-        return
+        return OUTCOME_EXTRACTION_FAILED, _trim(str(e))
+    except Exception as e:  # noqa: BLE001
+        _log.warning("leasehackr.deal_extract_unhandled", topic_id=topic_id, error=str(e))
+        return OUTCOME_EXTRACTION_FAILED, _trim(str(e))
 
     if not facts.get("is_deal_post"):
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_NOT_A_DEAL)
-        crawled_ids.add(topic_id)
-        return
+        return OUTCOME_NOT_A_DEAL, None
 
     province = facts.get("province_code")
     province = province.upper() if isinstance(province, str) else None
     if not province or province not in CANADIAN_PROVINCES:
-        # US deal or geography-unknown — record and skip per Phase 1.4
-        # contract: "skip and log non-Canadian; don't try to be clever
-        # about edge cases."
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_NON_CANADIAN)
-        crawled_ids.add(topic_id)
-        counters["skipped"] += 1
-        return
+        return OUTCOME_NON_CANADIAN, None
 
     try:
         await _store_deal(session, topic, facts, province)
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_DEAL_STORED)
         await session.commit()
-        crawled_ids.add(topic_id)
-        counters["deals_stored"] += 1
         _log.info(
             "leasehackr.deal_stored",
             topic_id=topic_id,
-            title=topic.get("title", "")[:80],
+            title=(topic.get("title") or "")[:80],
             province=province,
         )
-    except Exception as e:  # noqa: BLE001 — record failure, continue
+        return OUTCOME_DEAL_STORED, None
+    except Exception as e:  # noqa: BLE001
         await session.rollback()
         _log.warning("leasehackr.deal_store_failed", topic_id=topic_id, error=str(e))
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_DB_ERROR)
-        await session.commit()
-        crawled_ids.add(topic_id)
-        counters["skipped"] += 1
+        return OUTCOME_DB_ERROR, _trim(str(e))
 
 
 async def _store_deal(
@@ -242,8 +344,8 @@ async def _store_deal(
     mf = _opt_decimal(facts.get("money_factor"))
     if lease_rate is None and mf is not None:
         lease_rate = (mf * Decimal("2400")).quantize(Decimal("0.0001"))
-    # Schema stores rate as decimal (0.0149 = 1.49%). LH posts give the
-    # percent (3.99); convert to fraction.
+    # Schema stores rate as decimal fraction (0.0149 = 1.49%). LH posts
+    # give the percent (3.99); convert to fraction.
     if lease_rate is not None and lease_rate > Decimal("1"):
         lease_rate = lease_rate / Decimal("100")
 
@@ -266,7 +368,7 @@ async def _store_deal(
 
     notes_text = "; ".join(
         [
-            f"source=leasehackr",
+            "source=leasehackr",
             f"topic_id={topic.get('id')}",
             f"title={(topic.get('title') or '')[:200]}",
             f"lender={facts.get('lender') or ''}",
@@ -304,13 +406,11 @@ async def _store_deal(
 # ── Knowledge post processing ───────────────────────────────────────────
 
 async def _process_knowledge(
-    session:     AsyncSession,
-    cat:         Category,
-    topic:       dict[str, Any],
-    post_text:   str,
-    crawled_ids: set[int],
-    counters:    dict[str, int],
-) -> None:
+    session:   AsyncSession,
+    topic:     dict[str, Any],
+    post_text: str,
+) -> tuple[str, str | None]:
+    """Returns (outcome, error_message). Never raises."""
     topic_id = topic["id"]
     try:
         knowledge = await claude_client.extract_json(
@@ -319,35 +419,28 @@ async def _process_knowledge(
         )
     except ExternalServiceError as e:
         _log.warning("leasehackr.knowledge_extract_failed", topic_id=topic_id, error=str(e))
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_FETCH_FAILED)
-        crawled_ids.add(topic_id)
-        counters["skipped"] += 1
-        return
+        return OUTCOME_EXTRACTION_FAILED, _trim(str(e))
+    except Exception as e:  # noqa: BLE001
+        _log.warning("leasehackr.knowledge_extract_unhandled", topic_id=topic_id, error=str(e))
+        return OUTCOME_EXTRACTION_FAILED, _trim(str(e))
 
     if not knowledge.get("has_useful_knowledge"):
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_NO_KNOWLEDGE)
-        crawled_ids.add(topic_id)
-        return
+        return OUTCOME_NO_KNOWLEDGE, None
 
     try:
         await _store_knowledge_chunk(session, topic, knowledge)
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_KNOWLEDGE_STORED)
         await session.commit()
-        crawled_ids.add(topic_id)
-        counters["knowledge_stored"] += 1
         _log.info(
             "leasehackr.knowledge_stored",
             topic_id=topic_id,
-            title=topic.get("title", "")[:80],
+            title=(topic.get("title") or "")[:80],
             confidence=knowledge.get("confidence"),
         )
+        return OUTCOME_KNOWLEDGE_STORED, None
     except Exception as e:  # noqa: BLE001
         await session.rollback()
         _log.warning("leasehackr.knowledge_store_failed", topic_id=topic_id, error=str(e))
-        await _log_outcome(session, topic_id, cat.slug, OUTCOME_DB_ERROR)
-        await session.commit()
-        crawled_ids.add(topic_id)
-        counters["skipped"] += 1
+        return OUTCOME_DB_ERROR, _trim(str(e))
 
 
 async def _store_knowledge_chunk(
@@ -368,36 +461,110 @@ async def _store_knowledge_chunk(
         source_tags=[t["name"] for t in topic.get("tags", []) if isinstance(t, dict) and "name" in t],
         created_at=datetime.now(UTC),
     )
-    # ON CONFLICT DO NOTHING via the source_topic_id unique constraint:
-    # if we somehow re-process the same topic, swallow the duplicate.
     session.add(chunk)
-    try:
-        await session.flush()
-    except Exception:
-        await session.rollback()
-        # Re-record the outcome silently — caller will retry the commit.
-        raise
+    await session.flush()
 
 
 # ── Crawl-log helpers ───────────────────────────────────────────────────
 
 async def _get_crawled_topic_ids(session: AsyncSession) -> set[int]:
-    """Pre-load the set of topic_ids we've already processed. Bounded
-    by the table size — for a year of nightly crawls at 200/run, that's
-    ~73k rows, comfortable to hold in memory."""
-    result = await session.execute(select(LhCrawlLog.topic_id))
+    """Pre-load the set of FINAL-outcome topic_ids we've already
+    processed. Topics still in_progress are NOT excluded — the next
+    crawl re-processes them so we recover from interrupted runs.
+
+    Bounded by the table size: a year of nightly crawls at 200/run
+    is ~73k rows, fits comfortably in memory.
+    """
+    result = await session.execute(
+        select(LhCrawlLog.topic_id).where(LhCrawlLog.outcome != OUTCOME_IN_PROGRESS)
+    )
     return {row[0] for row in result.all()}
 
 
-async def _log_outcome(session: AsyncSession, topic_id: int, category: str, outcome: str) -> None:
-    """Idempotent insert into lh_crawl_log. ON CONFLICT DO NOTHING via
-    the topic_id PK."""
+async def _record_outcome_safely(
+    session:       AsyncSession,
+    topic_id:      int,
+    category:      str,
+    outcome:       str,
+    error_message: str | None,
+) -> None:
+    """
+    Bulletproof outcome write. Upserts the row in lh_crawl_log so
+    'in_progress' rows can be promoted to a final outcome.
+
+    Never raises. If the original write fails, rollback + retry once.
+    If the retry also fails, log via structlog and return — the row
+    stays at its previous value (in_progress, or unset). Worst case:
+    the topic is re-attempted on the next crawl (which is correct
+    behaviour for an interrupted/failed write).
+    """
+    # Phase 1.4a defect-fix #1: surface the error_message we're about
+    # to write so the next investigation can grep journalctl for what
+    # the row should have. Belt-and-suspenders alongside the SQL
+    # actually persisting it.
+    if error_message:
+        _log.info(
+            "leasehackr.outcome_recording",
+            topic_id=topic_id,
+            outcome=outcome,
+            error_preview=error_message[:200],
+        )
+
+    try:
+        await _upsert_outcome(session, topic_id, category, outcome, error_message)
+        await session.commit()
+        return
+    except Exception as e1:  # noqa: BLE001
+        try:
+            await session.rollback()
+            await _upsert_outcome(session, topic_id, category, outcome, error_message)
+            await session.commit()
+            return
+        except Exception as e2:  # noqa: BLE001
+            _log.error(
+                "leasehackr.outcome_write_failed",
+                topic_id=topic_id,
+                outcome=outcome,
+                first_error=str(e1),
+                retry_error=str(e2),
+            )
+
+
+async def _upsert_outcome(
+    session:       AsyncSession,
+    topic_id:      int,
+    category:      str,
+    outcome:       str,
+    error_message: str | None,
+) -> None:
+    """
+    ON CONFLICT (topic_id) DO UPDATE — promote in_progress to final.
+
+    Uses the canonical `stmt.excluded.<col>` idiom for the SET clause
+    so the values we passed to .values() are unambiguously what gets
+    written on conflict. This is what was broken in the first run
+    of Phase 1.4a — error_message stayed NULL on db_error rows because
+    the prior `set_={"error_message": error_message}` form lost the
+    Python-local through some SQLAlchemy quirk under the in_progress
+    upsert flow. The .excluded form references the row we tried to
+    insert, so it always matches.
+    """
     stmt = pg_insert(LhCrawlLog).values(
         topic_id=topic_id,
         category=category,
         outcome=outcome,
+        error_message=error_message,
         crawled_at=datetime.now(UTC),
-    ).on_conflict_do_nothing(index_elements=["topic_id"])
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["topic_id"],
+        set_={
+            "outcome":       stmt.excluded.outcome,
+            "error_message": stmt.excluded.error_message,
+            "crawled_at":    stmt.excluded.crawled_at,
+            "category":      stmt.excluded.category,
+        },
+    )
     await session.execute(stmt)
 
 
@@ -461,6 +628,12 @@ def _parse_deal_month(deal_date: Any, fallback_iso: Any) -> date | None:
     if fallback:
         return date(fallback.year, fallback.month, 1)
     return None
+
+
+# Cap error_message length so a giant traceback doesn't blow up the row.
+def _trim(s: str, *, limit: int = 1000) -> str:
+    s = s.strip()
+    return s if len(s) <= limit else s[: limit - 3] + "..."
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────

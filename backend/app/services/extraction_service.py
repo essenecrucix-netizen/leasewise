@@ -58,9 +58,13 @@ async def extract(worksheet_text: str) -> ExtractedFields:
             )
             return _shape(data, raw_excerpt=text[:500], used="claude-haiku")
         except Exception as e:  # noqa: BLE001 — fall back rather than crash
+            # The full exception (incl. provider error codes / billing
+            # messages) goes to structlog for ops. The user-visible
+            # `notes` text is generic — never leak upstream-provider
+            # detail to the rater UI.
             _log.warning("extraction.claude_failed_falling_back", error=str(e))
             fields = _regex_extract(text)
-            fields.notes.append(f"Claude extraction failed: {e!s}; using regex fallback.")
+            fields.notes.append("AI extraction unavailable, parsed via fallback parser.")
             return fields
 
     # No key → regex

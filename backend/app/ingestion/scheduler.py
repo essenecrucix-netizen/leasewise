@@ -40,14 +40,27 @@ _scheduler: AsyncIOScheduler | None = None
 
 
 def _ingestion_enabled() -> bool:
-    """Skip scheduling in two cases:
-      - LEASEWISE_DISABLE_SCHEDULER=true (set in CI / TestClient runs)
-      - environment is not 'production' AND ANTHROPIC_API_KEY is empty
-    Production always tries to schedule; if the key is missing the jobs
-    log and exit early on each fire."""
-    if os.environ.get("LEASEWISE_DISABLE_SCHEDULER", "").lower() in ("1", "true", "yes"):
+    """
+    Default: SCHEDULING IS DISABLED. Production must opt in by
+    explicitly setting LEASEWISE_DISABLE_SCHEDULER=false in the
+    systemd EnvironmentFile.
+
+    Phase 1.4a defect-fix #2 — the previous default-enabled behaviour
+    fired the crawl from any uvicorn process whose .env was silent on
+    the flag, including dev sessions started for unrelated testing.
+    Result: 03:00 UTC crawls running for two days against the dev
+    Anthropic account, $1.06 wasted, no usable log rows.
+
+    Truth table:
+      LEASEWISE_DISABLE_SCHEDULER unset       → False (disabled)
+      LEASEWISE_DISABLE_SCHEDULER=true / 1    → False (disabled)
+      LEASEWISE_DISABLE_SCHEDULER=false / 0   → True (enabled)
+      anything else                            → False (disabled)
+    """
+    raw = os.environ.get("LEASEWISE_DISABLE_SCHEDULER")
+    if raw is None:
         return False
-    return True
+    return raw.strip().lower() in ("0", "false", "no")
 
 
 def start_scheduler() -> AsyncIOScheduler | None:
@@ -55,7 +68,10 @@ def start_scheduler() -> AsyncIOScheduler | None:
     scheduler if already running."""
     global _scheduler
     if not _ingestion_enabled():
-        _log.info("ingestion.scheduler_disabled")
+        _log.info(
+            "ingestion.scheduler_disabled",
+            reason="LEASEWISE_DISABLE_SCHEDULER unset or non-false (default-disabled)",
+        )
         return None
     if _scheduler is not None and _scheduler.running:
         return _scheduler

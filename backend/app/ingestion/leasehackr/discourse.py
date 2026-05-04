@@ -31,9 +31,12 @@ _log = structlog.get_logger()
 
 
 LH_BASE             = "https://forum.leasehackr.com"
-CRAWL_DELAY_SEC     = 3.0          # be a polite crawler
-MAX_TOPICS_PER_RUN  = 200          # safety cap per nightly run
-POST_TEXT_CAP       = 3000         # truncate before sending to Claude
+CRAWL_DELAY_SEC      = 3.0          # be a polite crawler
+MAX_TOPICS_PER_RUN   = 200          # safety cap per nightly run (global)
+MAX_TOPICS_PER_CAT   = 80           # per-category cap so US-heavy categories
+                                    # (Signed Deals — ~95% non-Canadian) can't
+                                    # starve Ask the Hackrs / Wiki of budget
+POST_TEXT_CAP        = 3000         # truncate before sending to Claude
 
 
 @dataclass(frozen=True, slots=True)

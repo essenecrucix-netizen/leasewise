@@ -131,10 +131,30 @@ Province / country rules:
     country="US" and province_code=null.
   - If the post mentions a Canadian province by name or 2-letter code,
     set country="CA" and the matching province_code.
-  - Never map a US state code (e.g., "CA" = California) to a Canadian
-    province — context disambiguates: "California" or "$" with US
-    pricing → US; "Alberta" or "Edmonton, AB" → Canadian "AB".
-  - Default both to null if the post is silent about geography.
+
+  CRITICAL — "ca" disambiguation. On LeaseHackr the lowercase tag
+  "ca" almost always means California (a US state), not Canada.
+  Tags like "ca-socal", "ca-norcal", "ca-bayarea" are unambiguously
+  California. NEVER map any of these to province_code="CA":
+    - There is no Canadian province with code "CA" anyway. The
+      Canadian 2-letter codes are AB, BC, MB, NB, NL, NS, NT, NU,
+      ON, PE, QC, SK, YT — "CA" is not among them.
+    - A post tagged "ca" without explicit Canadian context (province
+      name spelled out, mention of a Canadian dealer, CAD pricing)
+      is California. Set country="US", province_code=null.
+    - A post with both "ca" and explicit Canadian signals (CAD prices,
+      Canadian dealer like "Bavaria BMW Edmonton") is Canadian — pick
+      the actual Canadian province from the body text.
+
+  Other US-state-vs-Canadian-province collisions to watch:
+    - "ON" → Ontario (Canadian) — but only when context is clearly
+      Canadian (CAD prices, Canadian dealer name). LeaseHackr rarely
+      tags US posts with "on", so default ON to Ontario when seen.
+    - "MB" / "NB" / "NS" — these don't have US-state collisions; safe
+      to map to Canadian provinces when seen.
+
+  - Default both country and province_code to null if the post is
+    silent about geography.
 
 Currency:
   - "CAD" if the post says CAD, $C, or mentions a Canadian dealer/province.
