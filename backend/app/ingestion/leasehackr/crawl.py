@@ -62,6 +62,7 @@ from app.services.ai import claude_client, prompts
 from app.ingestion.leasehackr.discourse import (
     CATEGORIES,
     CRAWL_DELAY_SEC,
+    MAX_TOPICS_PER_CAT,
     MAX_TOPICS_PER_RUN,
     Category,
     DiscourseClient,
@@ -129,8 +130,16 @@ async def _crawl_category(
     crawled_ids: set[int],
     counters:    dict[str, int],
 ) -> None:
+    """Process one Discourse category, capped at MAX_TOPICS_PER_CAT
+    new topics. The global cap MAX_TOPICS_PER_RUN still applies but
+    with the per-category cap, US-heavy categories can't starve the
+    others of budget."""
     page = 0
-    while counters["topics_processed"] < MAX_TOPICS_PER_RUN:
+    cat_processed = 0      # new topics processed in this category
+    while (
+        counters["topics_processed"] < MAX_TOPICS_PER_RUN
+        and cat_processed < MAX_TOPICS_PER_CAT
+    ):
         topic_list = await lh.get_topic_list(cat.id, page)
         topics = topic_list.get("topic_list", {}).get("topics", [])
         if not topics:
@@ -142,12 +151,27 @@ async def _crawl_category(
             break
 
         for topic in new_topics:
-            if counters["topics_processed"] >= MAX_TOPICS_PER_RUN:
+            if (
+                counters["topics_processed"] >= MAX_TOPICS_PER_RUN
+                or cat_processed >= MAX_TOPICS_PER_CAT
+            ):
                 break
+            before = counters["topics_processed"]
             await _handle_topic(session, lh, cat, topic, crawled_ids, counters)
+            # _handle_topic increments topics_processed only after the
+            # post-text gate; track at the same granularity here.
+            if counters["topics_processed"] > before:
+                cat_processed += 1
 
         page += 1
         await asyncio.sleep(CRAWL_DELAY_SEC)
+
+    _log.info(
+        "leasehackr.category_complete",
+        category=cat.slug,
+        cat_processed=cat_processed,
+        global_processed=counters["topics_processed"],
+    )
 
 
 async def _handle_topic(
@@ -210,23 +234,58 @@ async def _handle_topic(
 
     counters["topics_processed"] += 1
 
-    # 4. Branch by category mode. Each branch RETURNS an outcome —
-    #    it does not call _record_outcome_safely itself.
+    # 4. Knowledge extraction runs on EVERY topic regardless of category
+    #    or Canadian classification, per the architecture doc — that's
+    #    where broader lease intelligence (program details, captive
+    #    behavior, F&I tactics) lives. Errors are recorded but don't
+    #    block the deal-extraction step that follows for Signed Deals.
+    knowledge_outcome, knowledge_err = await _try_extract_knowledge(
+        session, topic, post_text,
+    )
+
+    # 5. Deal extraction runs only on Signed Deals topics. Knowledge
+    #    extraction has already run above; the deal step decides the
+    #    primary outcome label for the lh_crawl_log row.
     if cat.mode == "deals":
-        outcome, err = await _process_deal(session, topic, post_text)
-        if outcome == OUTCOME_DEAL_STORED:
+        deal_outcome, deal_err = await _process_deal(session, topic, post_text)
+        if deal_outcome == OUTCOME_DEAL_STORED:
             counters["deals_stored"] += 1
         else:
             counters["skipped"] += 1
+        primary_outcome = deal_outcome
+        primary_err     = deal_err
     else:
-        outcome, err = await _process_knowledge(session, topic, post_text)
-        if outcome == OUTCOME_KNOWLEDGE_STORED:
+        # mode == "knowledge" — the knowledge extraction above IS the
+        # primary work; reuse its outcome.
+        if knowledge_outcome == OUTCOME_KNOWLEDGE_STORED:
             counters["knowledge_stored"] += 1
         else:
             counters["skipped"] += 1
+        primary_outcome = knowledge_outcome
+        primary_err     = knowledge_err
 
-    await _record_outcome_safely(session, topic_id, cat.slug, outcome, err)
+    await _record_outcome_safely(session, topic_id, cat.slug, primary_outcome, primary_err)
     crawled_ids.add(topic_id)
+
+
+# ── Knowledge extraction (runs on every topic) ──────────────────────────
+
+async def _try_extract_knowledge(
+    session:   AsyncSession,
+    topic:     dict[str, Any],
+    post_text: str,
+) -> tuple[str, str | None]:
+    """
+    Always attempts knowledge extraction. Persists chunks for posts
+    that have useful knowledge. Returns the outcome the caller should
+    record — but for Signed Deals topics the caller overwrites with
+    the deal outcome since deals are the primary signal for that
+    category.
+
+    Knowledge chunks always include `applies_to_canada` (true/false/null)
+    so a downstream Canadian-only filter can be applied at query time.
+    """
+    return await _process_knowledge(session, topic, post_text)
 
 
 # ── Deal post processing ────────────────────────────────────────────────
@@ -439,6 +498,18 @@ async def _record_outcome_safely(
     the topic is re-attempted on the next crawl (which is correct
     behaviour for an interrupted/failed write).
     """
+    # Phase 1.4a defect-fix #1: surface the error_message we're about
+    # to write so the next investigation can grep journalctl for what
+    # the row should have. Belt-and-suspenders alongside the SQL
+    # actually persisting it.
+    if error_message:
+        _log.info(
+            "leasehackr.outcome_recording",
+            topic_id=topic_id,
+            outcome=outcome,
+            error_preview=error_message[:200],
+        )
+
     try:
         await _upsert_outcome(session, topic_id, category, outcome, error_message)
         await session.commit()
@@ -466,20 +537,32 @@ async def _upsert_outcome(
     outcome:       str,
     error_message: str | None,
 ) -> None:
-    """ON CONFLICT (topic_id) DO UPDATE — promote in_progress to final."""
+    """
+    ON CONFLICT (topic_id) DO UPDATE — promote in_progress to final.
+
+    Uses the canonical `stmt.excluded.<col>` idiom for the SET clause
+    so the values we passed to .values() are unambiguously what gets
+    written on conflict. This is what was broken in the first run
+    of Phase 1.4a — error_message stayed NULL on db_error rows because
+    the prior `set_={"error_message": error_message}` form lost the
+    Python-local through some SQLAlchemy quirk under the in_progress
+    upsert flow. The .excluded form references the row we tried to
+    insert, so it always matches.
+    """
     stmt = pg_insert(LhCrawlLog).values(
         topic_id=topic_id,
         category=category,
         outcome=outcome,
         error_message=error_message,
         crawled_at=datetime.now(UTC),
-    ).on_conflict_do_update(
+    )
+    stmt = stmt.on_conflict_do_update(
         index_elements=["topic_id"],
         set_={
-            "outcome":       outcome,
-            "error_message": error_message,
-            "crawled_at":    datetime.now(UTC),
-            "category":      category,
+            "outcome":       stmt.excluded.outcome,
+            "error_message": stmt.excluded.error_message,
+            "crawled_at":    stmt.excluded.crawled_at,
+            "category":      stmt.excluded.category,
         },
     )
     await session.execute(stmt)

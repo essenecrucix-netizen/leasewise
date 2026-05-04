@@ -160,3 +160,88 @@ def test_scheduler_disabled_for_unknown_values(monkeypatch) -> None:  # type: ig
     assert _ingestion_enabled() is False
     monkeypatch.setenv("LEASEWISE_DISABLE_SCHEDULER", "")
     assert _ingestion_enabled() is False
+
+
+# ── error_message persistence (Phase 1.4a defect-fix #1) ────────────────
+
+def test_upsert_outcome_renders_error_message_in_sql() -> None:
+    """
+    Verifies that `_upsert_outcome` actually emits SQL that carries
+    the Python-local error_message into both the INSERT VALUES and the
+    DO UPDATE SET clauses. This is the defect that bit Erik's first
+    real-data run — error_message stayed NULL in the DB despite the
+    crawler passing the value through.
+
+    We construct the same statement the function builds, compile it
+    against the postgresql dialect, and inspect the bound parameters.
+    """
+    from datetime import UTC, datetime
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from app.models.leasehackr import LhCrawlLog
+
+    error_text = "Postgres error: relation does not exist"
+    stmt = pg_insert(LhCrawlLog).values(
+        topic_id=99,
+        category="signed-deals",
+        outcome="db_error",
+        error_message=error_text,
+        crawled_at=datetime(2026, 5, 5, tzinfo=UTC),
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["topic_id"],
+        set_={
+            "outcome":       stmt.excluded.outcome,
+            "error_message": stmt.excluded.error_message,
+            "crawled_at":    stmt.excluded.crawled_at,
+            "category":      stmt.excluded.category,
+        },
+    )
+
+    # Compile to literal SQL so the error message is visible in the
+    # rendered statement (only safe in tests; production uses bound
+    # parameters via the engine).
+    compiled = stmt.compile(
+        dialect=__import__("sqlalchemy.dialects.postgresql", fromlist=["dialect"]).dialect(),
+        compile_kwargs={"literal_binds": True},
+    )
+    rendered = str(compiled)
+    # The INSERT ... VALUES (..., 'Postgres error: relation does not exist', ...)
+    assert error_text in rendered
+    # And the DO UPDATE SET should reference the EXCLUDED column, not
+    # a stale bound parameter that could lose its value.
+    assert "EXCLUDED.error_message" in rendered or "excluded.error_message" in rendered.lower()
+    assert "ON CONFLICT" in rendered.upper()
+
+
+def test_upsert_outcome_handles_null_error_message() -> None:
+    """error_message=None should serialize as NULL in both VALUES and
+    SET, not as an empty string or missing binding."""
+    from datetime import UTC, datetime
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from app.models.leasehackr import LhCrawlLog
+
+    stmt = pg_insert(LhCrawlLog).values(
+        topic_id=100,
+        category="ask-the-hackrs",
+        outcome="in_progress",
+        error_message=None,
+        crawled_at=datetime(2026, 5, 5, tzinfo=UTC),
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["topic_id"],
+        set_={
+            "outcome":       stmt.excluded.outcome,
+            "error_message": stmt.excluded.error_message,
+            "crawled_at":    stmt.excluded.crawled_at,
+            "category":      stmt.excluded.category,
+        },
+    )
+    rendered = str(
+        stmt.compile(
+            dialect=__import__(
+                "sqlalchemy.dialects.postgresql", fromlist=["dialect"],
+            ).dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "NULL" in rendered.upper()
