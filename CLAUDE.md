@@ -128,6 +128,25 @@ leasewise/
 - Tenant scoping: `tenant_id VARCHAR(50)` first column on user-scoped tables; every query filters by `tenant_id` (enforced via `app/db/session.py`).
 - Generated columns persist `days_on_lot`, `discount_percent`, `payment_to_msrp_ratio`. Don't recompute; query the column.
 
+### Azure Postgres specifics (production DB)
+
+The production DB is Azure Database for PostgreSQL Flexible Server, sharing
+the existing Workgraph instance with a separate `leasewise` database. Two
+quirks worth knowing:
+
+- **`CREATE EXTENSION` is admin-only on Azure managed Postgres.** The
+  application user (`leasewise`) does not have permission to run
+  `CREATE EXTENSION postgis` etc. Extensions are installed via the
+  Azure portal's `azure.extensions` parameter, then created in the
+  target DB by the admin (one-time). When applying `lease_platform_schema.sql`
+  to Azure, lines 31–33 (the three `CREATE EXTENSION` statements) are
+  commented out — the extensions are pre-provisioned. Local dev with apt /
+  brew Postgres can run them as-is; the lines are only commented when
+  applying against Azure.
+- **SSL is required.** Set `POSTGRES_SSL=true` in production `.env`.
+  `app/db/session.py` passes `ssl="require"` to `connect_args`. Set
+  `POSTGRES_SSL=false` for a local apt / brew Postgres without TLS.
+
 ---
 
 ## Critical rules — always do these
@@ -204,9 +223,16 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone <repo>
 cd leasewise
 
-# Env
+# Env — single source of truth at the repo root.
 cp .env.example .env
 # Edit .env: ANTHROPIC_API_KEY at minimum, MOCK_AUTH=true for local
+
+# Symlink so Next.js can read the same .env. Next looks in frontend/
+# but the canonical .env lives at repo root (also where the systemd
+# unit's EnvironmentFile= points). Keep this as a symlink — never as
+# a real file copy. A real file would drift out of sync with backend
+# env vars and bite you when CORS_ORIGINS or POSTGRES_* changes.
+ln -s ../.env frontend/.env
 
 # Backend
 cd backend
@@ -223,6 +249,12 @@ cd ..
 ./scripts/apply_schema.sh
 cd backend && source .venv/bin/activate && python ../scripts/seed_reference_data.py
 ```
+
+**Do not run `npm install` from the repo root.** There is no `package.json`
+at root — the only Node project is `frontend/`. Running npm at root creates
+a stray `package-lock.json` and triggers Next.js workspace-root-inference
+warnings on every dev start. The root `.gitignore` blocks committing such
+a file; just don't create it.
 
 ### Daily workflow
 
@@ -241,7 +273,37 @@ npm run dev
 # → http://localhost:3000
 ```
 
-Or `./scripts/run_local.sh` to start both with one command.
+Or `./scripts/run_local.sh` to bootstrap (verify prereqs, apply schema,
+seed) and print the same two commands.
+
+#### Port allocation on the shared dev VM
+
+The Azure dev VM also hosts Workgraph, which owns ports **3000** (frontend)
+and **8000** (backend). To avoid collisions, LeaseWise dev uses:
+
+| Service           | Default port | LeaseWise dev VM port |
+|-------------------|--------------|-----------------------|
+| Backend (uvicorn) | 8000         | **8001**              |
+| Frontend (next)   | 3000         | **3010**              |
+
+Override on the command line — neither port is hardcoded in the scripts:
+
+```bash
+uv run uvicorn app.main:app --reload --port 8001
+npm run dev -- --port 3010
+```
+
+When the frontend port is non-default, also append it to `CORS_ORIGINS`
+in `.env` (multi-origin syntax):
+
+```
+CORS_ORIGINS=["http://localhost:3000","http://localhost:3010"]
+```
+
+Production is unaffected — the systemd unit binds `8000` and Nginx
+upstreams `127.0.0.1:8000`. The dev-VM collision is local only; both
+projects' production traffic comes through different Cloudflare Tunnel
+hostnames into different vhosts on the production Nginx.
 
 ### Tests
 
@@ -255,12 +317,40 @@ cd frontend && npm test
 
 ### Migrations
 
+Alembic is configured (`backend/alembic.ini` + `backend/alembic/`).
+The runner uses the same async asyncpg engine as the app — no separate
+psycopg2 dependency. Versions live under `backend/alembic/versions/`
+with a `YYYY_MM_DD_HHMM-revid_slug.py` filename pattern so they sort
+chronologically.
+
 ```bash
 cd backend
 uv run alembic revision --autogenerate -m "describe change"
 # review the generated SQL
 uv run alembic upgrade head
 ```
+
+### Ingestion scheduler (Phase 1.4a)
+
+The in-process APScheduler that runs the LeaseHackr nightly crawl + weekly
+synthesis is **default-disabled**. Production opts in by setting
+`LEASEWISE_DISABLE_SCHEDULER=false` in the systemd unit's
+`EnvironmentFile=.env`. Dev sessions stay opted out automatically
+(unset variable → disabled), so a uvicorn started for unrelated
+testing won't fire 03:00 crawls behind your back.
+
+Truth table:
+
+| `LEASEWISE_DISABLE_SCHEDULER` | scheduler |
+|---|---|
+| unset | disabled |
+| `true` / `1` | disabled |
+| `false` / `0` | **enabled** (production opts in here) |
+| anything else | disabled (fail-safe) |
+
+Manual one-shot invocations remain available regardless of the flag:
+`python -m app.ingestion.leasehackr.crawl --once` and
+`python -m app.ingestion.leasehackr.synthesize --once`.
 
 ### Mock auth
 
@@ -384,3 +474,145 @@ If this file disagrees with the actual code (a path that no longer exists, a con
 ---
 
 *Last updated: May 2026 (v2 — corrected to remove Docker, match Workgraph deployment pattern). Maintained by Erik Brisson + Claude Code.*
+
+---
+
+# Engineering Principles
+
+(The four principles below are from Andrej Karpathy's observations on LLM coding pitfalls. They apply to every task in this repo.)
+
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+# Engineering Principles
+
+(The four principles below are from Andrej Karpathy's observations on LLM coding pitfalls. They apply to every task in this repo.)
+
+
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
+
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
+
+## 1. Think Before Coding
+
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+---
+
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

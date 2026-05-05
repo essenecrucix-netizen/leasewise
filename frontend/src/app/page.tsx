@@ -1,67 +1,36 @@
 /**
- * Homepage — /
+ * Homepage — / .
  *
- * Server Component. Fetches recent deals + active programs from the FastAPI
- * backend and renders the homepage hero, ticker, and "what dealers know"
- * panel. The composition mirrors the design-phase output at
- * docs/design-phase/homepage.jsx.
- *
- * Mobile responsive: at <768px, layout collapses to single column.
+ * Phase 1.2 placeholder. The full homepage (hero, deal ticker, programs
+ * snapshot, community highlights, sources strip) lands in a later phase
+ * and will replace this. For now, this just exists so visiting /
+ * doesn't 500 and so it points at the calculator.
  */
 
-import { Suspense } from 'react';
-
-import { HomepageHero }       from '@/components/homepage/HomepageHero';
-import { DealTicker }         from '@/components/homepage/DealTicker';
-import { WhatDealersKnow }    from '@/components/homepage/WhatDealersKnow';
-import { FloorplanClock }     from '@/components/homepage/FloorplanClock';
-import { ProgramsSnapshot }   from '@/components/homepage/ProgramsSnapshot';
-import { CommunityHighlights } from '@/components/homepage/CommunityHighlights';
-import { SourcesStrip }       from '@/components/homepage/SourcesStrip';
-
-import { fetchRecentDeals }   from '@/lib/api/deals';
-import { fetchActivePrograms } from '@/lib/api/programs';
+import Link from 'next/link';
 
 
-export const metadata = {
-  title:       'LeaseWise Canada — Real lease data for Canadian car buyers',
-  description: 'Free Canadian lease calculator with real provincial tax math. Real deal data from real Canadians. No accounts, no upsells.',
-};
-
-
-export default async function HomePage() {
-  // Parallel fetch on the server. Errors fall back gracefully to empty states.
-  const [deals, programs] = await Promise.all([
-    fetchRecentDeals({ limit: 12 }).catch(() => []),
-    fetchActivePrograms({ topN: 5 }).catch(() => []),
-  ]);
-
+export default function HomePage(): JSX.Element {
   return (
     <main>
-      <HomepageHero />
-
-      <Suspense fallback={<DealTickerSkeleton />}>
-        <DealTicker deals={deals} />
-      </Suspense>
-
-      <WhatDealersKnow />
-
-      <FloorplanClock vin="WBA5R7C58RFL12345" />
-
-      <ProgramsSnapshot programs={programs} />
-
-      <CommunityHighlights />
-
-      <SourcesStrip />
+      <section style={{ padding: 'var(--space-16) 0' }}>
+        <div className="container">
+          <span className="eyebrow">LeaseWise Canada</span>
+          <h1 className="t-h1" style={{ marginTop: 12 }}>
+            Real lease data for Canadian car buyers.
+          </h1>
+          <p className="t-body-l" style={{ maxWidth: '60ch', marginTop: 16 }}>
+            Tools, brand guides, and a community forum — all built around
+            real Canadian lease programs and real provincial tax math.
+            Phase 1 is in development.
+          </p>
+          <p style={{ marginTop: 24 }}>
+            <Link href="/tools/calculator" style={{ textDecoration: 'underline' }}>
+              Open the lease calculator →
+            </Link>
+          </p>
+        </div>
+      </section>
     </main>
-  );
-}
-
-
-function DealTickerSkeleton() {
-  return (
-    <div className="ticker-skeleton" aria-busy="true">
-      <span className="lwm-eyebrow">LIVE FROM THE FORUM</span>
-    </div>
   );
 }

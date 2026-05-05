@@ -7,15 +7,22 @@ Modules elsewhere import `settings`, never read os.environ directly.
 
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, computed_field
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Typed application settings."""
 
+    # The canonical .env lives at the repo root (the systemd unit points at
+    # /var/www/leasewise/.env). Local dev runs uvicorn from the backend/
+    # directory, so the file is one level up. The tuple lets pydantic-settings
+    # find it from either cwd: ../.env when running from backend/, .env when
+    # running from the repo root. Production injects env vars through systemd's
+    # EnvironmentFile= directive, so neither path matters there. Don't "fix"
+    # this to a single string — it will silently fail to load .env in dev.
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -35,11 +42,17 @@ class Settings(BaseSettings):
     postgres_db:       str = "leasewise"
     postgres_user:     str = "leasewise"
     postgres_password: str = ""
+    # Azure Database for PostgreSQL Flexible Server requires SSL. The
+    # default-True keeps prod safe; set POSTGRES_SSL=false in .env for a
+    # local apt-installed Postgres without TLS.
+    postgres_ssl:      bool = True
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Async SQLAlchemy URL for asyncpg driver."""
+        """Async SQLAlchemy URL for asyncpg driver. The `ssl=` query
+        parameter is consumed by asyncpg via SQLAlchemy's connect_args
+        path — see app/db/session.py."""
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
